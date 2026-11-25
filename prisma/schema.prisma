@@ -1,0 +1,340 @@
+generator client {
+  provider   = "prisma-client-js"
+  engineType = "client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TableStatus {
+  FREE
+  ACTIVE
+}
+
+enum SessionStatus {
+  ACTIVE
+  CLOSED
+}
+
+enum OrderStatus {
+  NEW
+  PREPARING
+  READY
+  DELIVERED
+}
+
+enum MenuTag {
+  GLUTEN_FREE
+  DAIRY
+  NUTS
+  SHELLFISH
+  VEGAN
+}
+
+enum ModifierKind {
+  SIZE
+  EXTRA
+}
+
+enum PaymentMethod {
+  CARD_ONLINE
+  POS_AT_TABLE
+  CASH
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  CANCELLED
+}
+
+enum StaffRole {
+  ADMIN
+  KITCHEN
+  WAITER
+}
+
+model Restaurant {
+  id           String            @id @default(cuid())
+  slug         String            @unique
+  name         String
+  currency     String            @default("GTQ") @db.Char(3)
+  timeZone     String            @default("America/Guatemala")
+  taxBps       Int               @default(0)
+  wifiSsid     String?
+  wifiPassword String?
+  createdAt    DateTime          @default(now())
+  tables       DiningTable[]
+  stations     KitchenStation[]
+  categories   Category[]
+  questions    TriviaQuestion[]
+  staff        StaffMembership[]
+}
+
+model StaffMembership {
+  restaurantId String
+  identityId   String
+  role         StaffRole
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@id([restaurantId, identityId, role])
+}
+
+model DiningTable {
+  id           String         @default(cuid())
+  restaurantId String
+  number       Int
+  tableCode    String
+  status       TableStatus    @default(FREE)
+  restaurant   Restaurant     @relation(fields: [restaurantId], references: [id])
+  sessions     TableSession[]
+
+  @@id([restaurantId, id])
+  @@unique([restaurantId, number])
+  @@unique([restaurantId, tableCode])
+  @@index([restaurantId, status])
+}
+
+model TableSession {
+  id            String         @default(cuid())
+  restaurantId  String
+  tableId       String
+  status        SessionStatus  @default(ACTIVE)
+  guestCount    Int
+  hostName      String?
+  hostTokenHash String?        @unique
+  createdAt     DateTime       @default(now())
+  closedAt      DateTime?
+  table         DiningTable    @relation(fields: [restaurantId, tableId], references: [restaurantId, id])
+  orders        Order[]
+  alerts        ServiceAlert[]
+  payments      Payment[]
+  triviaAnswers TriviaAnswer[]
+  review        SessionReview?
+
+  @@id([restaurantId, id])
+  @@index([restaurantId, tableId, status])
+}
+
+model KitchenStation {
+  id           String      @default(cuid())
+  restaurantId String
+  name         String
+  restaurant   Restaurant  @relation(fields: [restaurantId], references: [id])
+  items        MenuItem[]
+  orderItems   OrderItem[]
+
+  @@id([restaurantId, id])
+  @@unique([restaurantId, name])
+}
+
+model Category {
+  id           String     @default(cuid())
+  restaurantId String
+  name         String
+  sortOrder    Int        @default(0)
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  items        MenuItem[]
+
+  @@id([restaurantId, id])
+  @@unique([restaurantId, name])
+}
+
+model MenuItem {
+  id           String         @default(cuid())
+  restaurantId String
+  categoryId   String
+  stationId    String
+  name         String
+  description  String?
+  imageUrl     String?
+  priceCents   Int
+  spiceLevel   Int            @default(0)
+  tags         MenuTag[]      @default([])
+  available    Boolean        @default(true)
+  category     Category       @relation(fields: [restaurantId, categoryId], references: [restaurantId, id])
+  station      KitchenStation @relation(fields: [restaurantId, stationId], references: [restaurantId, id])
+  modifiers    MenuModifier[]
+  orderItems   OrderItem[]
+
+  @@id([restaurantId, id])
+  @@unique([restaurantId, categoryId, name])
+  @@index([restaurantId, stationId])
+}
+
+model MenuModifier {
+  id              String       @default(cuid())
+  restaurantId    String
+  menuItemId      String
+  kind            ModifierKind
+  name            String
+  priceDeltaCents Int
+  tags            MenuTag[]    @default([])
+  available       Boolean      @default(true)
+  menuItem        MenuItem     @relation(fields: [restaurantId, menuItemId], references: [restaurantId, id])
+
+  @@id([restaurantId, id])
+  @@unique([restaurantId, menuItemId, kind, name])
+}
+
+model Order {
+  id            String       @default(cuid())
+  restaurantId  String
+  sessionId     String
+  requestId     String
+  subtotalCents Int
+  taxBps        Int
+  taxCents      Int
+  totalCents    Int
+  createdAt     DateTime     @default(now())
+  session       TableSession @relation(fields: [restaurantId, sessionId], references: [restaurantId, id])
+  items         OrderItem[]
+
+  @@id([restaurantId, id])
+  @@unique([restaurantId, sessionId, requestId])
+}
+
+model OrderItem {
+  id             String              @default(cuid())
+  restaurantId   String
+  orderId        String
+  menuItemId     String
+  stationId      String
+  name           String
+  quantity       Int
+  unitPriceCents Int
+  subtotalCents  Int
+  notes          String?
+  tags           MenuTag[]           @default([])
+  status         OrderStatus         @default(NEW)
+  preparingAt    DateTime?
+  readyAt        DateTime?
+  deliveredAt    DateTime?
+  order          Order               @relation(fields: [restaurantId, orderId], references: [restaurantId, id])
+  menuItem       MenuItem            @relation(fields: [restaurantId, menuItemId], references: [restaurantId, id])
+  station        KitchenStation      @relation(fields: [restaurantId, stationId], references: [restaurantId, id])
+  modifiers      OrderItemModifier[]
+  allocations    PaymentAllocation[]
+
+  @@id([restaurantId, id])
+  @@index([restaurantId, orderId])
+  @@index([restaurantId, stationId, status])
+}
+
+model OrderItemModifier {
+  id              String       @default(cuid())
+  restaurantId    String
+  orderItemId     String
+  kind            ModifierKind
+  name            String
+  priceDeltaCents Int
+  tags            MenuTag[]    @default([])
+  orderItem       OrderItem    @relation(fields: [restaurantId, orderItemId], references: [restaurantId, id])
+
+  @@id([restaurantId, id])
+  @@index([restaurantId, orderItemId])
+}
+
+model ServiceAlert {
+  id                  String       @default(cuid())
+  restaurantId        String
+  sessionId           String
+  createdAt           DateTime     @default(now())
+  resolvedAt          DateTime?
+  responseTimeSeconds Int?
+  session             TableSession @relation(fields: [restaurantId, sessionId], references: [restaurantId, id])
+
+  @@id([restaurantId, id])
+  @@index([restaurantId, resolvedAt, createdAt])
+}
+
+model Payment {
+  id              String              @default(cuid())
+  restaurantId    String
+  sessionId       String
+  requestId       String
+  method          PaymentMethod
+  status          PaymentStatus       @default(PENDING)
+  subtotalCents   Int
+  taxCents        Int
+  tipCents        Int
+  totalCents      Int
+  equalPartySize  Int?
+  equalShareIndex Int?
+  receiptEmail    String?
+  paidAt          DateTime?
+  createdAt       DateTime            @default(now())
+  session         TableSession        @relation(fields: [restaurantId, sessionId], references: [restaurantId, id])
+  allocations     PaymentAllocation[]
+
+  @@id([restaurantId, id])
+  @@unique([restaurantId, sessionId, requestId])
+  @@index([restaurantId, status, paidAt])
+}
+
+model PaymentAllocation {
+  restaurantId  String
+  paymentId     String
+  orderItemId   String
+  quantity      Int
+  subtotalCents Int
+  taxCents      Int
+  payment       Payment   @relation(fields: [restaurantId, paymentId], references: [restaurantId, id])
+  orderItem     OrderItem @relation(fields: [restaurantId, orderItemId], references: [restaurantId, id])
+
+  @@id([restaurantId, paymentId, orderItemId])
+  @@index([restaurantId, orderItemId])
+}
+
+model SessionReview {
+  restaurantId String
+  sessionId    String
+  stars        Int
+  comment      String?
+  createdAt    DateTime     @default(now())
+  session      TableSession @relation(fields: [restaurantId, sessionId], references: [restaurantId, id])
+
+  @@id([restaurantId, sessionId])
+}
+
+model TriviaQuestion {
+  id           String        @default(cuid())
+  restaurantId String
+  prompt       String
+  options      String[]
+  correctIndex Int
+  available    Boolean       @default(true)
+  restaurant   Restaurant    @relation(fields: [restaurantId], references: [id])
+  rounds       TriviaRound[]
+
+  @@id([restaurantId, id])
+  @@unique([restaurantId, prompt])
+}
+
+model TriviaRound {
+  id           String         @default(cuid())
+  restaurantId String
+  questionId   String
+  startsAt     DateTime
+  endsAt       DateTime
+  question     TriviaQuestion @relation(fields: [restaurantId, questionId], references: [restaurantId, id])
+  answers      TriviaAnswer[]
+
+  @@id([restaurantId, id])
+  @@index([restaurantId, startsAt, endsAt])
+}
+
+model TriviaAnswer {
+  restaurantId String
+  roundId      String
+  sessionId    String
+  optionIndex  Int
+  points       Int          @default(0)
+  createdAt    DateTime     @default(now())
+  round        TriviaRound  @relation(fields: [restaurantId, roundId], references: [restaurantId, id])
+  session      TableSession @relation(fields: [restaurantId, sessionId], references: [restaurantId, id])
+
+  @@id([restaurantId, roundId, sessionId])
+}
