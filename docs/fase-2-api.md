@@ -34,6 +34,8 @@ npm run staff:token -- demo ADMIN
 
 Usa el token devuelto como `Authorization: Bearer <token>`. El servidor guarda su hash en `StaffMembership.identityId`. Elimina la membresía correspondiente para revocar la credencial.
 
+Para entrar a los paneles, abre `/staff/kds` o `/staff/waiter` e ingresa `restaurantId` y `token` del resultado del comando. Usa el slug de tu restaurante al generar la credencial (por ejemplo, `street-demo` para Patio Street). Una credencial `ADMIN` accede a ambos paneles. El navegador conserva la credencial en la sesión de la pestaña y el botón de salida la elimina de esa sesión.
+
 El prefijo es `/api/staff/{restaurantId}`. El rol `ADMIN` puede ejecutar todas las acciones del personal.
 
 | Método y ruta | Operación | Rol adicional |

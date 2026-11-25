@@ -54,7 +54,10 @@ export async function resolveAlert(restaurantId: string, alertId: string) {
 }
 
 export async function readWaiterBoard(restaurantId: string, filter: z.infer<typeof waiterQuerySchema>["filter"]) {
-  const [tables, priorityAlerts] = await prisma.$transaction(async (tx) => {
+  const [restaurant, tables, priorityAlerts] = await prisma.$transaction(async (tx) => {
+    const restaurant = await tx.restaurant.findUniqueOrThrow({
+      where: { id: restaurantId }, select: { name: true, currency: true },
+    });
     const tables = await tx.diningTable.findMany({
       where: { restaurantId },
       orderBy: { number: "asc" },
@@ -71,7 +74,10 @@ export async function readWaiterBoard(restaurantId: string, filter: z.infer<type
               orderBy: { createdAt: "asc" },
               select: {
                 id: true, createdAt: true,
-                items: { where: { status: "READY" }, select: { id: true, name: true, quantity: true, stationId: true } },
+                items: {
+                  where: { status: "READY" },
+                  select: { id: true, name: true, quantity: true, stationId: true, station: { select: { name: true } } },
+                },
               },
             },
             payments: {
@@ -90,7 +96,7 @@ export async function readWaiterBoard(restaurantId: string, filter: z.infer<type
         session: { select: { id: true, guestCount: true, table: { select: { id: true, number: true } } } },
       },
     });
-    return [tables, priorityAlerts] as const;
+    return [restaurant, tables, priorityAlerts] as const;
   }, { isolationLevel: "RepeatableRead" });
 
   const visible = tables.filter(({ sessions: [session] }) =>
@@ -105,5 +111,5 @@ export async function readWaiterBoard(restaurantId: string, filter: z.infer<type
     return { ...table, active: { ...data, hasHost: hostTokenHash !== null } };
   });
 
-  return { tables: visible, priorityAlerts };
+  return { restaurant, tables: visible, priorityAlerts };
 }

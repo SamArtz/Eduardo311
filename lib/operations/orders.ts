@@ -89,6 +89,9 @@ export async function createOrder(request: Request, table: TableKey, input: z.in
 }
 
 export async function readKds(restaurantId: string, stationId?: string) {
+  const restaurant = await prisma.restaurant.findUniqueOrThrow({
+    where: { id: restaurantId }, select: { name: true, currency: true },
+  });
   const stations = await prisma.kitchenStation.findMany({
     where: { restaurantId },
     orderBy: { name: "asc" },
@@ -130,7 +133,7 @@ export async function readKds(restaurantId: string, stationId?: string) {
     }
     return [status, [...tickets.values()]];
   }));
-  return { stations, columns };
+  return { restaurant, stations, columns };
 }
 
 const previousStatus = {
