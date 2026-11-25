@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  ArrowRight, Bell, ChevronRight, CircleCheck, ClipboardList, CookingPot, CreditCard, Gamepad2,
+  ArrowRight, Bell, ChevronRight, CircleCheck, ClipboardList, CreditCard, Gamepad2,
   LoaderCircle, ShoppingBag, UsersRound, Utensils, Wifi,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -285,57 +285,59 @@ export function Mesa({ restaurantSlug, tableCode }: { restaurantSlug: string; ta
         {connectionError ? <><h1>{connectionError}</h1><button className={styles.primary} type="button" onClick={() => void refreshSession()}>Volver a intentar</button></>
           : <p role="status"><LoaderCircle size={20} className={styles.spin} /> Cargando la mesa…</p>}
       </div> : <>
-        <section className={styles.hero} aria-label={name}>
-          <div className={styles.heroContent}>
-            <span className={styles.heroKicker}>Menú en mesa</span>
-            <h1>{name}</h1>
-            <a href="#menu">Explorar el menú <ArrowRight size={18} /></a>
-          </div>
-        </section>
+        <div className={styles.intro}>
+          <section className={styles.hero} aria-label={name}>
+            <div className={styles.heroContent}>
+              <span className={styles.heroKicker}>Menú en mesa</span>
+              <h1>{name}</h1>
+              <a href="#menu">Explorar el menú <ArrowRight size={18} /></a>
+            </div>
+          </section>
+          <section className={styles.tablePanel} data-host={host} aria-label="Sesión de la mesa">
+            <div className={styles.tablePanelHeading}>
+              <span className={styles.welcomeIcon}><UsersRound size={22} /></span>
+              <div><h2>{active ? "Tu mesa" : "Abre tu mesa"}</h2>
+                <p>Mesa {snapshot.table.number}{active && ` · ${active.session.guestCount} ${active.session.guestCount === 1 ? "persona" : "personas"}`}</p>
+              </div>
+            </div>
+            {!active && <>
+              <p className={styles.muted}>Indica cuántas personas vienen contigo para empezar a pedir.</p>
+              <button className={styles.primary} type="button" onClick={() => selectModal("start")}>Iniciar sesión de mesa <ArrowRight size={18} /></button>
+            </>}
+            {active && !host && <div className={styles.roleInfo}>
+              <strong>Modo acompañante</strong><p>{active.session.canClaim
+                ? "El control está disponible. Acerca tu celular a la placa NFC para tomarlo."
+                : "Puedes ver el menú, seguir los pedidos y jugar. El anfitrión ordena y paga."}</p>
+            </div>}
+            {host && <p className={styles.hostLabel}>Anfitrión{active?.session.hostName && ` · ${active.session.hostName}`}</p>}
+            <div className={styles.tableActions}>
+              <button type="button" className={`${styles.utility} ${styles.mobileDuplicate}`} onClick={() => selectModal("orders")}><ClipboardList size={19} />
+                <span>Pedidos{orderCount ? ` · ${orderCount}` : ""}</span><ChevronRight size={16} /></button>
+              {host && canOrder && <button type="button" className={`${styles.utility} ${styles.mobileDuplicate}`} onClick={() => selectModal("cart")}><ShoppingBag size={19} />
+                <span>Carrito{cartCount ? ` · ${cartCount}` : ""}</span><ChevronRight size={16} /></button>}
+              {host && <button type="button" className={styles.utility} disabled={!orderCount} onClick={() => selectModal("checkout")}><CreditCard size={19} />
+                <span>Ver cuenta</span><ChevronRight size={16} /></button>}
+            </div>
+            {checkoutStarted && <p className={styles.muted}>{active?.payments?.some(({ status }) => status === "PENDING") ? "Pago pendiente de confirmación." : "Cuenta en proceso de pago."}</p>}
+          </section>
+        </div>
         {(notice || connectionError || actionError) && <div className={styles.feedback}>
           {notice && <div className={styles.notice} role="status"><CircleCheck size={19} /><p>{notice}</p>
             <button className={styles.textButton} type="button" onClick={() => setNotice("")}>Cerrar aviso</button></div>}
           {connectionError && <p className={styles.error} role="alert">{connectionError} <button type="button" className={styles.textButton} onClick={() => void refreshSession()}>Reintentar</button></p>}
           {actionError && <p className={styles.error} role="alert">{actionError}</p>}
         </div>}
-        {!active && <div className={styles.welcome}>
-          <div className={styles.welcomeCopy}><span className={styles.welcomeIcon}><UsersRound size={22} /></span><div><h2>Abre tu mesa</h2><p>Indica cuántas personas vienen contigo para empezar a pedir.</p></div></div>
-          <button className={styles.primary} type="button" onClick={() => selectModal("start")}>Iniciar sesión de mesa <ArrowRight size={18} /></button>
-        </div>}
-        {active && !host && <div className={styles.readOnly}>
-          <UsersRound size={18} /><div><strong>Modo acompañante</strong><p>{active.session.canClaim
-            ? "El control está disponible. Acerca tu celular a la placa NFC para tomarlo."
-            : "Puedes ver el menú, seguir los pedidos y jugar. El anfitrión ordena y paga."}</p></div>
-        </div>}
+        <section id="servicios" className={styles.serviceBar} aria-label="Servicios de la mesa">
+          <button type="button" className={styles.utility} onClick={() => selectModal("wifi")}><span className={styles.utilityIcon}><Wifi size={19} /></span>
+            <span>Wi-Fi</span><ChevronRight size={16} /></button>
+          <button type="button" className={styles.utility} onClick={() => selectModal("trivia")}><span className={styles.utilityIcon}><Gamepad2 size={19} /></span>
+            <span>Trivia en vivo</span><ChevronRight size={16} /></button>
+          {host && <div className={styles.waiterService}><WaiterButton alert={active?.alert ?? null} busy={callBusy} call={() => void callWaiter()} /></div>}
+        </section>
         <div className={styles.layout}>
           {loadingMenu ? <p role="status" className={styles.loading}>Cargando el menú…</p>
             : menuError ? <div className={styles.empty}><p role="alert">{menuError}</p><button type="button" className={styles.secondary} onClick={() => void refreshMenu()}>Reintentar menú</button></div>
               : <Menu categories={categories} canOrder={canOrder} format={format} open={(item) => { setModal(null); setDish(item); }} />}
-          <aside id="servicios" className={styles.rail} aria-label="Servicios de la mesa">
-            <section className={styles.railCard}>
-              <div className={styles.railHeading}><div><h2>Tu mesa</h2><p>Mesa {snapshot.table.number}{active && ` · ${active.session.guestCount} ${active.session.guestCount === 1 ? "persona" : "personas"}`}</p></div>
-                <span className={styles.railSymbol}><CookingPot size={22} /></span>
-              </div>
-              {host && <p className={styles.hostLabel}>Anfitrión{active?.session.hostName && ` · ${active.session.hostName}`}</p>}
-              <button type="button" className={styles.utility} onClick={() => selectModal("orders")}><span className={styles.utilityIcon}><ClipboardList size={19} /></span>
-                <span>Pedidos{orderCount ? ` · ${orderCount}` : ""}</span><ChevronRight size={17} /></button>
-              {host && <>
-                {canOrder && <button type="button" className={styles.utility} onClick={() => selectModal("cart")}><span className={styles.utilityIcon}><ShoppingBag size={19} /></span>
-                  <span>Carrito{cartCount ? ` · ${cartCount}` : ""}</span><ChevronRight size={17} /></button>}
-                <button type="button" className={styles.utility} disabled={!orderCount} onClick={() => selectModal("checkout")}><span className={styles.utilityIcon}><CreditCard size={19} /></span>
-                  <span>Ver cuenta</span><ChevronRight size={17} /></button>
-                {checkoutStarted && <p className={styles.muted}>{active?.payments?.some(({ status }) => status === "PENDING") ? "Pago pendiente de confirmación." : "Cuenta en proceso de pago."}</p>}
-              </>}
-            </section>
-            <section className={styles.railCard}>
-              <h2>Servicios</h2>
-              <button type="button" className={styles.utility} onClick={() => selectModal("wifi")}><span className={styles.utilityIcon}><Wifi size={19} /></span>
-                <span>Wi-Fi</span><ChevronRight size={17} /></button>
-              <button type="button" className={styles.utility} onClick={() => selectModal("trivia")}><span className={styles.utilityIcon}><Gamepad2 size={19} /></span>
-                <span>Trivia en vivo</span><ChevronRight size={17} /></button>
-              {host && <WaiterButton alert={active?.alert ?? null} busy={callBusy} call={() => void callWaiter()} />}
-            </section>
-          </aside>
         </div>
         <nav className={styles.bottomNav} aria-label="Accesos de la mesa">
           <a href="#menu" className={styles.menuNav}><Utensils size={20} /> Menú</a>

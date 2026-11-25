@@ -14,6 +14,22 @@ function normalize(value: string) {
   return value.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
 }
 
+function DishCard({ dish, canOrder, format, open, featured = false }: {
+  dish: Dish; canOrder: boolean; format: Format; open: (dish: Dish) => void; featured?: boolean;
+}) {
+  return <article className={featured ? `${styles.dish} ${styles.featuredDish}` : styles.dish}>
+    {dish.imageUrl && <img className={styles.dishPhoto} src={dish.imageUrl} alt="" loading="lazy" referrerPolicy="no-referrer" />}
+    <div className={styles.dishBody}>
+      <div className={styles.dishTitle}><h4>{dish.name}</h4><strong>{format(dish.priceCents)}</strong></div>
+      {dish.description && <p>{dish.description}</p>}
+      <DishTags dish={dish} />
+      <button className={styles.dishAction} type="button" onClick={() => open(dish)} aria-label={`${canOrder ? "Agregar" : "Ver"} ${dish.name}`}>
+        {canOrder ? "Agregar" : "Ver detalles"} {canOrder ? <Plus size={17} /> : <ChevronRight size={17} />}
+      </button>
+    </div>
+  </article>;
+}
+
 export function Menu({ categories, canOrder, format, open }: {
   categories: Category[]; canOrder: boolean; format: Format; open: (dish: Dish) => void;
 }) {
@@ -28,6 +44,15 @@ export function Menu({ categories, canOrder, format, open }: {
       ).includes(term)),
     })).filter(({ items }) => items.length);
 
+  const firstCategory = categories.find(({ items }) => items.length);
+  const images = new Set<string>();
+  const featured = !selected && !term ? (firstCategory?.items.filter(({ imageUrl }) => {
+    if (!imageUrl || images.has(imageUrl)) return false;
+    images.add(imageUrl);
+    return true;
+  }).slice(0, 3) ?? []) : [];
+  const featuredIds = new Set(featured.length === 3 ? featured.map(({ id }) => id) : []);
+
   return <section id="menu" className={styles.menu}>
     <div className={styles.menuHeading}>
       <h2>Menú</h2>
@@ -41,22 +66,19 @@ export function Menu({ categories, canOrder, format, open }: {
       {[{ id: "", name: "Todo" }, ...categories.filter(({ items }) => items.length)].map(({ id, name }) =>
         <button key={id} type="button" aria-pressed={selected === id} onClick={() => setSelected(id)}>{name}</button>)}
     </nav>
-    {matches.length ? matches.map(({ id, name, items }) => <section key={id} className={styles.category}>
-      <h3>{name}</h3>
-      <div className={styles.dishGrid}>
-        {items.map((dish) => <article key={dish.id} className={styles.dish}>
-          {dish.imageUrl && <img className={styles.dishPhoto} src={dish.imageUrl} alt="" loading="lazy" referrerPolicy="no-referrer" />}
-          <div className={styles.dishBody}>
-            <div className={styles.dishTitle}><h4>{dish.name}</h4><strong>{format(dish.priceCents)}</strong></div>
-            {dish.description && <p>{dish.description}</p>}
-            <DishTags dish={dish} />
-            <button className={styles.dishAction} type="button" onClick={() => open(dish)} aria-label={`${canOrder ? "Agregar" : "Ver"} ${dish.name}`}>
-              {canOrder ? "Agregar" : "Ver detalles"} {canOrder ? <Plus size={17} /> : <ChevronRight size={17} />}
-            </button>
-          </div>
-        </article>)}
-      </div>
-    </section>) : <div className={styles.empty}><Utensils size={22} /><p>{search ? "No encontramos platillos para esa búsqueda." : "No hay platillos disponibles en esta categoría."}</p></div>}
+    {featuredIds.size > 0 && <section className={styles.featured}>
+      <h3>Destacados</h3>
+      <div>{featured.map((dish) => <DishCard key={dish.id} dish={dish} canOrder={canOrder} format={format} open={open} featured />)}</div>
+    </section>}
+    {matches.length ? matches.map(({ id, name, items }) => {
+      const remaining = items.filter((dish) => !featuredIds.has(dish.id));
+      return remaining.length > 0 && <section key={id} className={styles.category}>
+        <h3>{name}</h3>
+        <div className={styles.dishGrid}>
+          {remaining.map((dish) => <DishCard key={dish.id} dish={dish} canOrder={canOrder} format={format} open={open} />)}
+        </div>
+      </section>;
+    }) : <div className={styles.empty}><Utensils size={22} /><p>{search ? "No encontramos platillos para esa búsqueda." : "No hay platillos disponibles en esta categoría."}</p></div>}
   </section>;
 }
 

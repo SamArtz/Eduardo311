@@ -3,6 +3,8 @@ import { randomBytes } from "node:crypto";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, type MenuTag, type ModifierKind } from "@prisma/client";
 
+import { streetCategories, streetProducts, type StreetCategory } from "./street-menu";
+
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("Configura DATABASE_URL en .env");
 
@@ -27,9 +29,10 @@ const extraAvocado: Modifier = { kind: "EXTRA", name: "Aguacate", priceDeltaCent
 const extraCheese: Modifier = { kind: "EXTRA", name: "Queso fresco", priceDeltaCents: 700, tags: ["DAIRY"] };
 
 type Dish = {
+  imageUrl?: string | null;
   name: string;
   description: string;
-  category: keyof typeof categories;
+  category: keyof typeof categories | StreetCategory;
   station: keyof typeof stations;
   priceCents: number;
   spiceLevel: number;
@@ -65,12 +68,24 @@ const questions = [
   { prompt: "¿Qué sabor se asocia principalmente con el limón?", options: ["Dulce", "Ácido", "Umami"], correctIndex: 1 },
 ];
 
+const street = process.argv.includes("--street");
+const restaurantData = street
+  ? { slug: "street-demo", name: "Patio Street", currency: "USD", timeZone: "America/El_Salvador", wifiSsid: "Patio-Invitados", wifiPassword: "patiodemo" }
+  : { slug: "demo", name: "Mesa y Fogón", wifiSsid: "MesaYFogon-Invitados", wifiPassword: "fogondemo", taxBps: 1200 };
+const categoryNames: Record<string, string> = street ? streetCategories : categories;
+const catalog: Dish[] = street ? streetProducts.map((item) => ({
+  ...item,
+  modifiers: item.category === "combos" || item.category === "singles"
+    ? [{ kind: "EXTRA", name: "Extra queso", priceDeltaCents: 100, tags: ["DAIRY"] }]
+    : [],
+})) : dishes;
+
 async function seed() {
-  await prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx) => {
     const restaurant = await tx.restaurant.upsert({
-      where: { slug: "demo" },
+      where: { slug: restaurantData.slug },
       update: {},
-      create: { slug: "demo", name: "Mesa y Fogón", wifiSsid: "MesaYFogon-Invitados", wifiPassword: "fogondemo", taxBps: 1200 },
+      create: restaurantData,
     });
     const restaurantId = restaurant.id;
 
@@ -85,7 +100,7 @@ async function seed() {
     }
 
     const categoryIds = new Map<string, string>();
-    for (const [sortOrder, name] of Object.values(categories).entries()) {
+    for (const [sortOrder, name] of Object.values(categoryNames).entries()) {
       const category = await tx.category.upsert({
         where: { restaurantId_name: { restaurantId, name } },
         update: {},
@@ -102,8 +117,8 @@ async function seed() {
       });
     }
 
-    for (const { category, station, modifiers, ...dish } of dishes) {
-      const categoryId = categoryIds.get(categories[category]);
+    for (const { category, station, modifiers, ...dish } of catalog) {
+      const categoryId = categoryIds.get(categoryNames[category]);
       const stationId = stationIds.get(stations[station]);
       if (!categoryId || !stationId) throw new Error(`Categoría o estación ausente para ${dish.name}`);
 
@@ -130,11 +145,14 @@ async function seed() {
         create: { restaurantId, ...question },
       });
     }
+    return tx.diningTable.findFirstOrThrow({
+      where: { restaurantId, number: 1 }, select: { tableCode: true },
+    });
   }, { timeout: 20_000 });
 }
 
 seed()
-  .then(() => console.log("Restaurante demo preparado."))
+  .then(({ tableCode }) => console.log(`Restaurante demo preparado. /r/${restaurantData.slug}/mesa/${tableCode}`))
   .catch((error: unknown) => {
     console.error(error);
     process.exitCode = 1;
