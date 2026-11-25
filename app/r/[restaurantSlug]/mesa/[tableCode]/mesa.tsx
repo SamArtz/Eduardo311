@@ -1,0 +1,394 @@
+"use client";
+
+import {
+  ArrowRight, Bell, ChevronRight, CircleCheck, ClipboardList, CookingPot, CreditCard, Gamepad2,
+  LoaderCircle, ShoppingBag, UsersRound, Utensils, Wifi,
+} from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+
+import { checkoutSchema, claimSessionSchema, createOrderSchema, sessionActionSchema, startSessionSchema } from "@/lib/validators";
+
+import { Checkout } from "./checkout";
+import {
+  message, requestId, tableRequest, RequestError,
+  type Alert, type CartLine, type Category, type Dish, type PayInput, type Payment, type Quote, type QuoteInput,
+  type Session, type Snapshot,
+} from "./data";
+import { DishDialog, Menu } from "./menu";
+import { Dialog, Stepper } from "./ui";
+import { CartDialog, OrdersDialog, TriviaDialog, WaiterButton, WifiDialog } from "./utilities";
+import styles from "./mesa.module.css";
+
+type Modal = "start" | "wifi" | "trivia" | "orders" | "cart" | "checkout";
+type PaymentResult = { payment: Payment; closed: boolean };
+type Attempt = { signature: string; id: string };
+
+function readToken(key: string) {
+  try { return window.localStorage.getItem(key) ?? undefined; }
+  catch { return undefined; }
+}
+
+function storeToken(key: string, token?: string) {
+  try {
+    if (token) window.localStorage.setItem(key, token);
+    else window.localStorage.removeItem(key);
+  } catch {
+    // Private storage may be unavailable. The current page still holds the token in memory.
+  }
+}
+
+function intentId(attempt: { current: Attempt | null }, payload: unknown) {
+  const signature = JSON.stringify(payload);
+  if (attempt.current?.signature !== signature) attempt.current = { signature, id: requestId() };
+  return attempt.current.id;
+}
+
+export function Mesa({ restaurantSlug, tableCode }: { restaurantSlug: string; tableCode: string }) {
+  const base = `/api/r/${restaurantSlug}/mesa/${tableCode}`;
+  const tokenKey = `restaurantes:host:${restaurantSlug}:${tableCode}`;
+  const token = useRef<string | undefined>(undefined);
+  const sessionReads = useRef(0);
+  const ordering = useRef(false);
+  const calling = useRef(false);
+  const orderRetry = useRef<Attempt | null>(null);
+  const paymentRetry = useRef<Attempt | null>(null);
+  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loadingMenu, setLoadingMenu] = useState(true);
+  const [menuError, setMenuError] = useState("");
+  const [connectionError, setConnectionError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [pendingPayment, setPendingPayment] = useState<{ id: string; sessionId: string } | null>(null);
+  const [actionError, setActionError] = useState("");
+  const [modal, setModal] = useState<Modal | null>(null);
+  const [dish, setDish] = useState<Dish | null>(null);
+  const [cart, setCart] = useState<CartLine[]>([]);
+  const [sendBusy, setSendBusy] = useState(false);
+  const [callBusy, setCallBusy] = useState(false);
+  const [cartError, setCartError] = useState("");
+  const [triviaVersion, setTriviaVersion] = useState(0);
+
+  const setToken = useCallback((value?: string) => {
+    token.current = value;
+    storeToken(tokenKey, value);
+  }, [tokenKey]);
+
+  const refreshSession = useCallback(async () => {
+    const version = ++sessionReads.current;
+    const usedToken = token.current;
+    try {
+      const next = await tableRequest<Snapshot>(base + "/session", { token: usedToken });
+      if (version !== sessionReads.current || usedToken !== token.current) return;
+      if (usedToken && next.active?.session.role !== "HOST") setToken();
+      setSnapshot(next);
+      setConnectionError("");
+      return next;
+    } catch (failure) {
+      if (version === sessionReads.current) setConnectionError(message(failure));
+    }
+  }, [base, setToken]);
+
+  const refreshMenu = useCallback(async () => {
+    setLoadingMenu(true);
+    try {
+      setCategories((await tableRequest<{ categories: Category[] }>(base + "/menu")).categories);
+      setMenuError("");
+    } catch (failure) {
+      setMenuError(message(failure));
+    } finally {
+      setLoadingMenu(false);
+    }
+  }, [base]);
+
+  useEffect(() => {
+    let mounted = true;
+    token.current = readToken(tokenKey);
+    async function initialize() {
+      const next = await refreshSession();
+      if (!mounted || !next?.active?.session.canClaim) return;
+      try {
+        const claim = await tableRequest<{ session: Session; hostToken?: string }>(base + "/session", {
+          token: token.current, body: claimSessionSchema.parse({}),
+        });
+        if (claim.hostToken) setToken(claim.hostToken);
+        if (mounted) await refreshSession();
+      } catch (failure) {
+        if (mounted) setActionError(message(failure));
+      }
+    }
+    void initialize();
+    void refreshMenu();
+    return () => { mounted = false; sessionReads.current++; };
+  }, [base, refreshMenu, refreshSession, setToken, tokenKey]);
+
+  const restaurantId = snapshot?.restaurant.id;
+  useEffect(() => {
+    if (!restaurantId) return;
+    const events = new EventSource(`/api/realtime/${restaurantId}?tableCode=${encodeURIComponent(tableCode)}`);
+    const sync = () => { void refreshSession(); setTriviaVersion((version) => version + 1); };
+    const change = (event: MessageEvent<string>) => {
+      const { topic } = JSON.parse(event.data) as { topic: string };
+      if (topic === "trivia") setTriviaVersion((version) => version + 1);
+      else void refreshSession();
+    };
+    const visible = () => { if (document.visibilityState === "visible") sync(); };
+    const stored = (event: StorageEvent) => {
+      if (event.key !== tokenKey) return;
+      token.current = readToken(tokenKey);
+      sync();
+    };
+    events.addEventListener("sync", sync);
+    events.addEventListener("change", change);
+    document.addEventListener("visibilitychange", visible);
+    window.addEventListener("storage", stored);
+    return () => {
+      events.close();
+      document.removeEventListener("visibilitychange", visible);
+      window.removeEventListener("storage", stored);
+    };
+  }, [restaurantId, tableCode, refreshSession, tokenKey]);
+
+  const active = snapshot?.active ?? null;
+  const host = active?.session.role === "HOST";
+  const sessionId = active?.session.id;
+  const checkoutStarted = active?.payments?.some(({ status }) => status !== "CANCELLED") ?? false;
+  const canOrder = host && !checkoutStarted;
+  const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const orderCount = active?.orders.length ?? 0;
+
+  useEffect(() => {
+    orderRetry.current = null;
+    paymentRetry.current = null;
+    setCart([]);
+    setCartError("");
+    if (!host) setModal((current) => current === "cart" || current === "checkout" ? null : current);
+  }, [host, sessionId]);
+
+  useEffect(() => {
+    if (!pendingPayment || !snapshot) return;
+    if (active?.session.id !== pendingPayment.sessionId) {
+      setNotice("La sesión de la mesa se cerró.");
+      setPendingPayment(null);
+      return;
+    }
+    const status = active.payments?.find(({ id }) => id === pendingPayment.id)?.status;
+    if (!status || status === "PENDING") return;
+    setNotice(status === "PAID" ? "Pago en mesa confirmado." : "El pago en mesa fue cancelado.");
+    setPendingPayment(null);
+  }, [active, pendingPayment, snapshot]);
+
+  function selectModal(value: Modal) {
+    setActionError("");
+    setModal(value);
+  }
+
+  async function openTable(guestCount: number, hostName: string) {
+    const result = await tableRequest<{ session: Session; hostToken?: string }>(base + "/session", {
+      body: startSessionSchema.parse({ guestCount, hostName: hostName.trim() || undefined }),
+    });
+    if (result.hostToken) setToken(result.hostToken);
+    await refreshSession();
+    setModal(null);
+    setNotice(result.hostToken ? "Mesa abierta. Ya puedes enviar pedidos." : "La mesa ya tiene anfitrión.");
+  }
+
+  async function sendOrder() {
+    if (!canOrder || !sessionId || ordering.current || !cart.length) return;
+    ordering.current = true;
+    setSendBusy(true);
+    setCartError("");
+    try {
+      const payload = { sessionId, items: cart.map(({ dish, modifiers, quantity, notes }) => ({
+        menuItemId: dish.id, modifierIds: modifiers.map(({ id }) => id), quantity, notes,
+      })) };
+      await tableRequest(base + "/orders", {
+        token: token.current, body: createOrderSchema.parse({ ...payload, requestId: intentId(orderRetry, payload) }),
+      });
+      orderRetry.current = null;
+      setCart([]);
+      setModal(null);
+      setNotice("Pedido enviado a cocina.");
+      await refreshSession();
+    } catch (failure) {
+      setCartError(message(failure));
+      if (failure instanceof RequestError && (failure.status === 403 || failure.status === 409)) await refreshSession();
+    } finally {
+      ordering.current = false;
+      setSendBusy(false);
+    }
+  }
+
+  async function callWaiter() {
+    if (!sessionId || !host || calling.current) return;
+    calling.current = true;
+    setCallBusy(true);
+    setActionError("");
+    try {
+      const { alert } = await tableRequest<{ alert: Alert }>(base + "/alerts", {
+        token: token.current, body: sessionActionSchema.parse({ sessionId }),
+      });
+      setSnapshot((current) => current?.active?.session.id === sessionId
+        ? { ...current, active: { ...current.active, alert } }
+        : current);
+      await refreshSession();
+    } catch (failure) {
+      setActionError(message(failure));
+      await refreshSession();
+    } finally {
+      calling.current = false;
+      setCallBusy(false);
+    }
+  }
+
+  async function checkoutRequest<T>(suffix: string, body: unknown) {
+    try {
+      return await tableRequest<T>(base + suffix, { token: token.current, body });
+    } catch (failure) {
+      if (failure instanceof RequestError && (failure.status === 403 || failure.status === 409)) await refreshSession();
+      throw failure;
+    }
+  }
+
+  function pay(input: Omit<PayInput, "requestId">) {
+    return checkoutRequest<PaymentResult>("/checkout", checkoutSchema.parse({ ...input, requestId: intentId(paymentRetry, input) }));
+  }
+
+  function paid(result: PaymentResult) {
+    paymentRetry.current = null;
+    if (result.closed) setToken();
+    if (result.payment.status === "PENDING" && sessionId) {
+      setPendingPayment({ id: result.payment.id, sessionId });
+    }
+    setModal(null);
+    setNotice(result.payment.status === "PENDING" ? "Pago solicitado. El mesero confirmará el cobro en mesa."
+      : result.closed ? "Pago confirmado. Gracias por tu visita." : "Pago parcial confirmado.");
+    void refreshSession();
+  }
+
+  const format = (cents: number) => new Intl.NumberFormat("es-GT", {
+    style: "currency", currency: snapshot?.restaurant.currency ?? "GTQ",
+  }).format(cents / 100);
+  const name = snapshot?.restaurant.name;
+
+  return <div className={styles.shell}>
+    <header className={styles.header}><div className={styles.headerInner}>
+      <a href="#menu" className={styles.brand}><span className={styles.brandIcon}><Utensils size={20} /></span>{name ?? "Restaurante"}</a>
+      {snapshot && <>
+        <nav className={styles.headerNav} aria-label="Navegación principal">
+          <a href="#menu">Menú</a><button type="button" onClick={() => selectModal("orders")}>Pedidos</button><a href="#servicios">Servicios</a>
+        </nav>
+        <span className={styles.tableBadge}><span /> Mesa {snapshot.table.number}</span>
+      </>}
+    </div></header>
+    <main className={styles.main}>
+      {!snapshot ? <div className={styles.loading}>
+        {connectionError ? <><h1>{connectionError}</h1><button className={styles.primary} type="button" onClick={() => void refreshSession()}>Volver a intentar</button></>
+          : <p role="status"><LoaderCircle size={20} className={styles.spin} /> Cargando la mesa…</p>}
+      </div> : <>
+        <section className={styles.hero} aria-label={name}>
+          <div className={styles.heroContent}>
+            <span className={styles.heroKicker}>Menú de la mesa {snapshot.table.number}</span>
+            <h1>{name}</h1>
+            <a href="#menu">Explorar el menú <ArrowRight size={18} /></a>
+          </div>
+        </section>
+        {(notice || connectionError || actionError) && <div className={styles.feedback}>
+          {notice && <div className={styles.notice} role="status"><CircleCheck size={19} /><p>{notice}</p>
+            <button className={styles.textButton} type="button" onClick={() => setNotice("")}>Cerrar aviso</button></div>}
+          {connectionError && <p className={styles.error} role="alert">{connectionError} <button type="button" className={styles.textButton} onClick={() => void refreshSession()}>Reintentar</button></p>}
+          {actionError && <p className={styles.error} role="alert">{actionError}</p>}
+        </div>}
+        {!active && <div className={styles.welcome}>
+          <div><h2>Abre tu mesa</h2><p>Indica cuántas personas vienen contigo para empezar a pedir.</p></div>
+          <button className={styles.primary} type="button" onClick={() => selectModal("start")}><UsersRound size={18} /> Iniciar sesión de mesa</button>
+        </div>}
+        {active && !host && <div className={styles.readOnly}>
+          <UsersRound size={18} /><div><strong>Modo acompañante</strong><p>{active.session.canClaim
+            ? "El control está disponible. Acerca tu celular a la placa NFC para tomarlo."
+            : "Puedes ver el menú, seguir los pedidos y jugar. El anfitrión ordena y paga."}</p></div>
+        </div>}
+        <div className={styles.layout}>
+          {loadingMenu ? <p role="status" className={styles.loading}>Cargando el menú…</p>
+            : menuError ? <div className={styles.empty}><p role="alert">{menuError}</p><button type="button" className={styles.secondary} onClick={() => void refreshMenu()}>Reintentar menú</button></div>
+              : <Menu categories={categories} canOrder={canOrder} format={format} open={(item) => { setModal(null); setDish(item); }} />}
+          <aside id="servicios" className={styles.rail} aria-label="Servicios de la mesa">
+            <section className={styles.railCard}>
+              <div className={styles.railHeading}><div><h2>Tu mesa</h2><p>Mesa {snapshot.table.number}{active && ` · ${active.session.guestCount} ${active.session.guestCount === 1 ? "persona" : "personas"}`}</p></div>
+                <span className={styles.railSymbol}><CookingPot size={22} /></span>
+              </div>
+              {host && <p className={styles.hostLabel}>Anfitrión{active?.session.hostName && ` · ${active.session.hostName}`}</p>}
+              <button type="button" className={styles.utility} onClick={() => selectModal("orders")}><span className={styles.utilityIcon}><ClipboardList size={19} /></span>
+                <span>Pedidos{orderCount ? ` · ${orderCount}` : ""}</span><ChevronRight size={17} /></button>
+              {host && <>
+                {canOrder && <button type="button" className={styles.utility} onClick={() => selectModal("cart")}><span className={styles.utilityIcon}><ShoppingBag size={19} /></span>
+                  <span>Carrito{cartCount ? ` · ${cartCount}` : ""}</span><ChevronRight size={17} /></button>}
+                <button type="button" className={styles.utility} disabled={!orderCount} onClick={() => selectModal("checkout")}><span className={styles.utilityIcon}><CreditCard size={19} /></span>
+                  <span>Ver cuenta</span><ChevronRight size={17} /></button>
+                {checkoutStarted && <p className={styles.muted}>{active?.payments?.some(({ status }) => status === "PENDING") ? "Pago pendiente de confirmación." : "Cuenta en proceso de pago."}</p>}
+              </>}
+            </section>
+            <section className={styles.railCard}>
+              <h2>Servicios</h2>
+              <button type="button" className={styles.utility} onClick={() => selectModal("wifi")}><span className={styles.utilityIcon}><Wifi size={19} /></span>
+                <span>Wi-Fi</span><ChevronRight size={17} /></button>
+              <button type="button" className={styles.utility} onClick={() => selectModal("trivia")}><span className={styles.utilityIcon}><Gamepad2 size={19} /></span>
+                <span>Trivia en vivo</span><ChevronRight size={17} /></button>
+              {host && <WaiterButton alert={active?.alert ?? null} busy={callBusy} call={() => void callWaiter()} />}
+            </section>
+          </aside>
+        </div>
+        <nav className={styles.bottomNav} aria-label="Accesos de la mesa">
+          <a href="#menu"><Utensils size={20} /> Menú</a>
+          <button type="button" onClick={() => selectModal("orders")}><ClipboardList size={20} /> Pedidos</button>
+          <a href="#servicios"><Bell size={20} /> Servicios</a>
+          {canOrder && <button type="button" onClick={() => selectModal("cart")}><ShoppingBag size={20} /> Carrito{cartCount > 0 && <span>{cartCount}</span>}</button>}
+        </nav>
+        {modal === "start" && !active && <OpenDialog open={openTable} close={() => setModal(null)} />}
+        {modal === "orders" && <OrdersDialog active={active} format={format} close={() => setModal(null)} />}
+        {modal === "wifi" && <WifiDialog ssid={snapshot.restaurant.wifiSsid} password={snapshot.restaurant.wifiPassword} close={() => setModal(null)} />}
+        {modal === "trivia" && <TriviaDialog path={base + "/trivia"} sessionId={sessionId} refreshVersion={triviaVersion} tableNumber={snapshot.table.number} close={() => setModal(null)} />}
+        {modal === "cart" && canOrder && <CartDialog cart={cart} format={format} busy={sendBusy} error={cartError} close={() => setModal(null)}
+          send={() => void sendOrder()} change={(id, quantity) => setCart((current) => quantity === 0 ? current.filter((line) => line.id !== id)
+            : current.map((line) => line.id === id ? { ...line, quantity } : line))} />}
+        {modal === "checkout" && host && active && <Checkout active={active} format={format} close={() => setModal(null)}
+          quote={(input: QuoteInput) => checkoutRequest<Quote>("/checkout/quote", input)} pay={pay} completed={paid} />}
+        {dish && <DishDialog key={dish.id} dish={dish} canOrder={canOrder} format={format} close={() => setDish(null)} add={(line) => {
+          if (!canOrder) return;
+          if (cart.length >= 30) throw new RequestError("Envía esta ronda antes de agregar más platillos.", 422);
+          setCart((current) => [...current, line]);
+          setCartError("");
+          setDish(null);
+        }} />}
+      </>}
+    </main>
+  </div>;
+}
+
+function OpenDialog({ open, close }: {
+  open: (count: number, name: string) => Promise<void>; close: () => void;
+}) {
+  const [count, setCount] = useState(2);
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const submitting = useRef(false);
+
+  async function submit() {
+    if (submitting.current) return;
+    submitting.current = true;
+    setBusy(true);
+    setError("");
+    try { await open(count, name); }
+    catch (failure) { setError(message(failure)); }
+    finally { submitting.current = false; setBusy(false); }
+  }
+
+  return <Dialog title="Abre tu mesa" close={() => { if (!busy) close(); }}>
+    <form className={styles.form} onSubmit={(event) => { event.preventDefault(); void submit(); }}>
+      <div className={styles.quantityRow}><span>¿Cuántas personas son?</span><Stepper label="personas" change={setCount} value={count} disabled={busy} /></div>
+      <label className={styles.field}>Tu nombre <span>Opcional</span><input value={name} maxLength={80} disabled={busy} autoComplete="given-name" onChange={(event) => setName(event.target.value)} /></label>
+      {error && <p className={styles.error} role="alert">{error}</p>}
+      <button type="submit" disabled={busy} className={styles.primary}>{busy ? "Abriendo…" : "Abrir mesa"} <ArrowRight size={18} /></button>
+    </form>
+  </Dialog>;
+}

@@ -21,7 +21,7 @@ export const startSessionSchema = z.strictObject({
 export const sessionActionSchema = z.strictObject({ sessionId: identifier });
 export const resolveAlertSchema = z.strictObject({ alertId: identifier });
 
-const orderLineSchema = z.strictObject({
+export const orderLineSchema = z.strictObject({
   menuItemId: identifier,
   quantity: z.int().min(1).max(20),
   modifierIds: z.array(identifier).max(12)
