@@ -192,7 +192,17 @@ export async function readTable(table: Awaited<ReturnType<typeof findTable>>, re
     return [restaurant, { session, orders, alert, payments }] as const;
   }, { isolationLevel: "RepeatableRead" });
 
-  return { restaurant, table: { id: table.id, number: table.number, status: active ? "ACTIVE" : "FREE" }, active };
+  const { wifiPassword, ...publicRestaurant } = restaurant;
+  const wifiLocked = Boolean(restaurant.wifiSsid && wifiPassword && !active?.orders.length);
+  return {
+    restaurant: {
+      ...publicRestaurant,
+      wifiLocked,
+      wifiPassword: !wifiLocked && restaurant.wifiSsid ? wifiPassword : null,
+    },
+    table: { id: table.id, number: table.number, status: active ? "ACTIVE" : "FREE" },
+    active,
+  };
 }
 
 export async function readMenu(table: TableKey) {

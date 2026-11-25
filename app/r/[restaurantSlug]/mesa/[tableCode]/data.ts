@@ -84,6 +84,7 @@ export type Snapshot = {
     currency: string;
     wifiSsid: string | null;
     wifiPassword: string | null;
+    wifiLocked: boolean;
   };
   table: { id: string; number: number; status: "FREE" | "ACTIVE" };
   active: Active | null;

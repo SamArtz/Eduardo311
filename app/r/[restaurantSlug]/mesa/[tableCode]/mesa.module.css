@@ -1,18 +1,19 @@
 .shell {
-  --paper: #fcf6ed;
-  --surface: #fffdf9;
+  --paper: #efe4d8;
+  --surface: #f8f0e7;
   --ink: #30231f;
   --header-height: 64px;
   --muted: #65544b;
-  --action: #ffc6a8;
-  --action-hover: #ffb48d;
-  --accent-soft: #fbe7dc;
-  --border: #e5d4c8;
-  --cream: #f4eae0;
+  --action: #edab90;
+  --action-hover: #e89a79;
+  --accent-soft: #efd8ca;
+  --border: #d5bfb0;
+  --cream: #eadbd0;
   --display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --motion: 210ms cubic-bezier(.2, .7, .3, 1);
   --shadow: 0 2px 3px #5934240b, 0 8px 20px #59342414;
   min-height: 100dvh;
-  background: radial-gradient(ellipse at 35% 0%, #f7ddd4 0, transparent 39rem), var(--paper);
+  background: radial-gradient(ellipse at 35% 0%, #e8c9be 0, transparent 39rem), var(--paper);
   color-scheme: light;
   color: var(--ink);
   font-family: "Manrope Variable", system-ui, sans-serif;
@@ -25,7 +26,7 @@
   outline-offset: 3px;
 }
 .shell .hero a:focus-visible { outline-color: #ffd6c3; }
-.header { position: sticky; top: 0; z-index: 8; background: #fff7ef; color: var(--ink); border-bottom: 1px solid var(--border); }
+.header { position: sticky; top: 0; z-index: 8; background: #f2e4d8; color: var(--ink); border-bottom: 1px solid var(--border); }
 .headerInner, .main { max-width: 1240px; margin: 0 auto; padding-inline: clamp(16px, 4vw, 52px); }
 .headerInner { display: flex; height: calc(var(--header-height) - 1px); align-items: center; justify-content: space-between; gap: 12px; }
 .brand { min-width: 0; display: flex; gap: 10px; align-items: center; font: 800 25px/.94 var(--display); text-transform: uppercase; overflow-wrap: anywhere; }
@@ -33,7 +34,7 @@
 .brandIcon { display: grid; place-items: center; flex: 0 0 36px; height: 36px; border-radius: 9px; background: var(--action); color: #181512; }
 .headerNav { display: none; align-items: center; gap: 30px; font-size: 14px; font-weight: 700; color: #65544b; }
 .headerNav :is(a, button):hover { color: #8f432d; }
-.tableBadge { display: flex; align-items: center; gap: 8px; flex-shrink: 0; white-space: nowrap; border: 1px solid var(--border); background: #e7eedf; padding: 6px 10px; border-radius: 9px; font-size: 12px; }
+.tableBadge { display: flex; align-items: center; gap: 8px; flex-shrink: 0; white-space: nowrap; border: 1px solid var(--border); background: #dbe4d3; padding: 6px 10px; border-radius: 9px; font-size: 12px; }
 .tableBadge i { width: 7px; height: 7px; border-radius: 50%; background: #74866b; }
 .tableBadge[data-active="true"] i { background: #a7583d; }
 .tableBadge :is(strong, small) { display: block; line-height: 1.2; }
@@ -89,7 +90,7 @@
 .search input::-webkit-search-cancel-button { display: none; }
 .search input:focus { outline: none !important; }
 .search:focus-within { outline: 2px solid #975037; }
-.categoryBar { position: sticky; z-index: 6; top: var(--header-height); margin: 0 0 19px; padding-block: 5px; background: #fff7ef; border-block: 1px solid var(--border); }
+.categoryBar { position: sticky; z-index: 6; top: var(--header-height); margin: 0 0 19px; padding-block: 5px; background: #f2e4d8; border-block: 1px solid var(--border); }
 .filters { display: flex; gap: 7px; overflow-x: auto; overscroll-behavior-inline: contain; padding: 5px; scrollbar-width: thin; scrollbar-color: #b89a89 transparent; }
 .filters button, .segmented button { min-height: 44px; padding: 8px 13px; background: var(--surface); font-size: 13px; font-weight: 800; border: 1px solid var(--border); border-radius: 9px; }
 .filters button { flex-shrink: 0; white-space: nowrap; border-radius: 7px; }
@@ -115,7 +116,7 @@
 .tags span.spice { border-color: #e3b8a3; background: #f8e1d6; color: #83442e; }
 .dishFoot { display: flex; align-items: center; justify-content: space-between; gap: 8px; align-self: stretch; margin-top: auto; }
 .dishFoot strong { color: #934c31; font: 800 26px/1 var(--display); letter-spacing: .02em; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.dishAction { scroll-margin-block: calc(var(--header-height) + 70px) 135px; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 10px; border: 1px solid #ddc6b6; color: #83442e; background: #f9e9df; }
+.dishAction { scroll-margin-block: calc(var(--header-height) + 70px) 135px; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 10px; border: 1px solid #ddc6b6; color: #83442e; background: #eedbcd; }
 .dishAction[data-order="true"] { background: var(--action); border-color: var(--action); color: #26190f; }
 .dishAction:hover { background: #f4d9c9; }
 .dishAction[data-order="true"]:hover { background: var(--action-hover); }
@@ -126,11 +127,11 @@
 .utilityIcon { display: grid; place-items: center; background: var(--accent-soft); color: #884630; width: 34px; height: 34px; border-radius: 9px; }
 .alertStatus { display: flex; gap: 7px; align-items: center; color: var(--ink); font-weight: 650; font-size: 13px; padding-top: 7px; }
 .alertStatus time { font-variant-numeric: tabular-nums; margin-left: auto; }
-.bottomNav { position: fixed; inset: auto 0 0; z-index: 7; border-top: 1px solid #e5d4c8; background: #fff7ef; box-shadow: 0 -6px 25px #5c403321; display: flex; gap: 4px; padding: 6px 10px max(8px, env(safe-area-inset-bottom)); justify-content: space-around; }
+.bottomNav { position: fixed; inset: auto 0 0; z-index: 7; border-top: 1px solid #d5bfb0; background: #f2e4d8; box-shadow: 0 -6px 25px #5c403321; display: flex; gap: 4px; padding: 6px 10px max(8px, env(safe-area-inset-bottom)); justify-content: space-around; }
 .bottomNav > * { position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; min-height: 51px; justify-content: center; color: #503b31; font-size: 11px; font-weight: 800; border-radius: 8px; }
 .bottomNav .menuNav { color: #975037; }
 .bottomNav .cartNav { background: var(--action); color: #1c1712; }
-.bottomNav span { position: absolute; top: 3px; left: calc(50% + 9px); font-size: 10px; min-width: 16px; height: 16px; padding-inline: 3px; display: grid; place-items: center; border-radius: 50px; background: #613e30; color: #fff7ef; }
+.bottomNav span { position: absolute; top: 3px; left: calc(50% + 9px); font-size: 10px; min-width: 16px; height: 16px; padding-inline: 3px; display: grid; place-items: center; border-radius: 50px; background: #613e30; color: #f2e4d8; }
 .dialog {
   color: var(--ink);
   background: var(--surface);
@@ -145,6 +146,14 @@
   overscroll-behavior: contain;
 }
 .dialog::backdrop { background: #3c251e72; }
+.dialog[open], .mobileCart, .wifiReveal { animation: surfaceIn var(--motion) both; }
+.dialog[open]::backdrop { animation: backdropIn var(--motion) both; }
+@keyframes surfaceIn { from { opacity: 0; transform: translateY(7px); } }
+@keyframes backdropIn { from { opacity: 0; } }
+.wifiLocked { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 9px; background: var(--accent-soft); font-size: 14px; }
+.wifiLocked svg { flex-shrink: 0; margin-top: 2px; color: #884630; }
+.wifiLocked p { color: var(--muted); margin-top: 2px; }
+.shell :is(button, a) { transition: color var(--motion), background-color var(--motion), border-color var(--motion); }
 .dialogHeader { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 13px; }
 .dialogHeader h2 { font: 800 40px/.92 var(--display); text-transform: uppercase; overflow-wrap: anywhere; }
 .iconButton { display: inline-grid; place-items: center; min-width: 37px; min-height: 37px; border-radius: 9px; color: var(--ink); flex-shrink: 0; }
@@ -210,11 +219,10 @@
 .answer[aria-pressed="true"] { opacity: 1 !important; color: var(--ink); background: var(--accent-soft); font-weight: bold; }
 
 @media (hover: hover) {
-  .dishPhoto { transition: transform .23s ease; }
+  .dishPhoto { transition: transform var(--motion); }
   .dish:hover .dishPhoto { transform: scale(1.034); }
-  .dish { transition: border-color .16s ease, box-shadow .16s ease; }
+  .dish { transition: border-color var(--motion), box-shadow var(--motion); }
   .dish:hover { border-color: #c8977e; box-shadow: 0 8px 20px #59342422; }
-  .shell :is(button, a) { transition: color .15s ease, background-color .15s ease; }
 }
 @media (max-width: 519px) {
   .hero { min-height: 170px; }
@@ -247,7 +255,7 @@
   .main { padding-bottom: 58px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .spin { animation: none; }
+  .shell :is(.spin, .dialog[open], .mobileCart, .wifiReveal), .dialog[open]::backdrop { animation: none; }
   .shell :is(button, a, .dish, .dishPhoto) { transition: none; }
 }
 
@@ -261,7 +269,7 @@
   z-index: 7;
   inset: auto 0 calc(58px + max(8px, env(safe-area-inset-bottom))) 0;
   padding: 6px 10px;
-  background: #fff7ef;
+  background: #f2e4d8;
 }
 .mobileCart button {
   display: flex;

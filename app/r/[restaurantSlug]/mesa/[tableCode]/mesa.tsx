@@ -431,7 +431,7 @@ export function Mesa({ restaurantSlug, tableCode }: { restaurantSlug: string; ta
         </nav>
         {modal === "start" && !active && <OpenDialog open={openTable} close={() => setModal(null)} />}
         {modal === "orders" && <OrdersDialog active={active} format={format} close={() => setModal(null)} />}
-        {modal === "wifi" && <WifiDialog ssid={snapshot.restaurant.wifiSsid} password={snapshot.restaurant.wifiPassword} close={() => setModal(null)} />}
+        {modal === "wifi" && <WifiDialog ssid={snapshot.restaurant.wifiSsid} password={snapshot.restaurant.wifiPassword} locked={snapshot.restaurant.wifiLocked} close={() => setModal(null)} />}
         {modal === "trivia" && <TriviaDialog path={base + "/trivia"} sessionId={sessionId} refreshVersion={triviaVersion} tableNumber={snapshot.table.number} close={() => setModal(null)} />}
         {modal === "cart" && canOrder && <CartDialog cart={cart} format={format} busy={sendBusy} error={cartError} close={() => setModal(null)}
           unavailable={unavailable} menuReady={menuReady} refresh={() => void refreshMenu()}

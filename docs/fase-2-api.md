@@ -6,7 +6,7 @@ El prefijo de las APIs de mesa es `/api/r/{restaurantSlug}/mesa/{tableCode}`. El
 
 | Método y ruta | Operación |
 | --- | --- |
-| `GET /session` | Devuelve restaurante, Wi-Fi, mesa y sesión activa. La sesión incluye el rol, los pedidos y la última alerta. Los datos de cobro se limitan al anfitrión. |
+| `GET /session` | Devuelve restaurante, Wi-Fi, mesa y sesión activa. La contraseña Wi-Fi se entrega a la mesa después de su primer pedido y solo mientras esa sesión esté activa. La sesión incluye el rol, los pedidos y la última alerta. Los datos de cobro se limitan al anfitrión. |
 | `POST /session` | Recibe `{ guestCount, hostName? }` al abrir una mesa libre. Con la mesa activa, un cuerpo `{}` reclama el control si se liberó y devuelve el rol actual en caso contrario. |
 | `GET /menu` | Devuelve categorías, platillos disponibles, etiquetas, picante, imágenes y opciones. |
 | `POST /orders` | Recibe `{ sessionId, requestId, items: [{ menuItemId, quantity, modifierIds, notes? }] }`. |

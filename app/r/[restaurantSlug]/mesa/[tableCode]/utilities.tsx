@@ -1,6 +1,6 @@
 "use client";
 
-import { BellRing, Check, Clipboard, Clock3, ListOrdered, Trophy, Trash2, Wifi } from "lucide-react";
+import { BellRing, Check, Clipboard, Clock3, ListOrdered, LockKeyhole, Trophy, Trash2, Wifi } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { triviaAnswerSchema } from "@/lib/validators";
@@ -17,7 +17,7 @@ export function AlertStatus({ alert }: { alert: Alert }) {
   return <p className={styles.alertStatus}><Clock3 size={18} /> Esperando al mesero <time>{elapsed === null ? "—:—" : minutesSeconds(elapsed)}</time></p>;
 }
 
-export function WifiDialog({ ssid, password, close }: { ssid: string | null; password: string | null; close: () => void }) {
+export function WifiDialog({ ssid, password, locked, close }: { ssid: string | null; password: string | null; locked: boolean; close: () => void }) {
   const field = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState("");
   async function copy() {
@@ -43,10 +43,14 @@ export function WifiDialog({ ssid, password, close }: { ssid: string | null; pas
   return <Dialog title="Wi-Fi" close={close}>
     {ssid ? <div className={styles.form}>
       <div className={styles.summary}><span><Wifi size={18} /> Red</span><strong>{ssid}</strong></div>
-      {password ? <><label className={styles.field}>Contraseña<input readOnly ref={field} value={password} /></label>
-        <button type="button" className={styles.primary} onClick={() => void copy()}><Clipboard size={17} /> Copiar contraseña</button></>
-        : <p className={styles.muted}>Esta red no tiene contraseña configurada.</p>}
-      <p role="status" className={styles.muted}>{status}</p>
+      {locked ? <div className={styles.wifiLocked} role="status">
+        <LockKeyhole size={19} aria-hidden="true" />
+        <div><strong>Contraseña bloqueada</strong><p>Podrás verla cuando la mesa envíe su primer pedido a cocina.</p></div>
+      </div> : password ? <div className={`${styles.form} ${styles.wifiReveal}`}>
+        <label className={styles.field}>Contraseña<input readOnly ref={field} value={password} /></label>
+        <button type="button" className={styles.primary} onClick={() => void copy()}><Clipboard size={17} /> Copiar contraseña</button>
+        <p role="status" className={styles.muted}>{status}</p>
+      </div> : <p className={styles.muted}>Esta red no tiene contraseña configurada.</p>}
     </div> : <p className={styles.muted}>El restaurante aún no ha publicado los datos de su Wi-Fi.</p>}
   </Dialog>;
 }
