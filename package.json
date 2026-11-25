@@ -8,7 +8,8 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "postinstall": "prisma generate",
-    "staff:token": "tsx scripts/provision-staff.ts"
+    "staff:token": "tsx scripts/provision-staff.ts",
+    "db:import-legacy": "tsx scripts/import-legacy.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^6.19.3",
