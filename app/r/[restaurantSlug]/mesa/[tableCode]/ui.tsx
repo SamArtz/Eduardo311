@@ -9,8 +9,12 @@ export function Dialog({ title, close, children }: { title: string; close: () =>
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const element = dialog.current;
+    const trigger = document.activeElement;
     element?.showModal();
-    return () => element?.close();
+    return () => {
+      element?.close();
+      if (trigger instanceof HTMLElement && trigger.isConnected) trigger.focus({ preventScroll: true });
+    };
   }, []);
   return (
     <dialog ref={dialog} className={styles.dialog} aria-label={title} onCancel={(event) => { event.preventDefault(); close(); }} onClick={(event) => {

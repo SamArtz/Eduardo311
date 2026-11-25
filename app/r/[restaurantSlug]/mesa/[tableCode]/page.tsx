@@ -1,3 +1,6 @@
+import "@fontsource/barlow-condensed/latin-800.css";
+import "@fontsource-variable/manrope";
+
 import { notFound } from "next/navigation";
 
 import { tableParamsSchema } from "@/lib/validators";

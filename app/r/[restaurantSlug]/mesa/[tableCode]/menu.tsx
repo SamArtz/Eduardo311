@@ -1,6 +1,6 @@
 "use client";
 
-import { Flame, Plus, Search, Utensils, X } from "lucide-react";
+import { ChevronRight, Flame, Plus, Search, Utensils, X } from "lucide-react";
 import { useState } from "react";
 import { orderLineSchema } from "@/lib/validators";
 
@@ -51,7 +51,7 @@ export function Menu({ categories, canOrder, format, open }: {
             {dish.description && <p>{dish.description}</p>}
             <DishTags dish={dish} />
             <button className={styles.dishAction} type="button" onClick={() => open(dish)} aria-label={`${canOrder ? "Agregar" : "Ver"} ${dish.name}`}>
-              {canOrder && <Plus size={16} />} {canOrder ? "Agregar" : "Ver detalles"}
+              {canOrder ? "Agregar" : "Ver detalles"} {canOrder ? <Plus size={17} /> : <ChevronRight size={17} />}
             </button>
           </div>
         </article>)}

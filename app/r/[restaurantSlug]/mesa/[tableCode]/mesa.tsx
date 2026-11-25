@@ -287,7 +287,7 @@ export function Mesa({ restaurantSlug, tableCode }: { restaurantSlug: string; ta
       </div> : <>
         <section className={styles.hero} aria-label={name}>
           <div className={styles.heroContent}>
-            <span className={styles.heroKicker}>Menú de la mesa {snapshot.table.number}</span>
+            <span className={styles.heroKicker}>Menú en mesa</span>
             <h1>{name}</h1>
             <a href="#menu">Explorar el menú <ArrowRight size={18} /></a>
           </div>
@@ -299,8 +299,8 @@ export function Mesa({ restaurantSlug, tableCode }: { restaurantSlug: string; ta
           {actionError && <p className={styles.error} role="alert">{actionError}</p>}
         </div>}
         {!active && <div className={styles.welcome}>
-          <div><h2>Abre tu mesa</h2><p>Indica cuántas personas vienen contigo para empezar a pedir.</p></div>
-          <button className={styles.primary} type="button" onClick={() => selectModal("start")}><UsersRound size={18} /> Iniciar sesión de mesa</button>
+          <div className={styles.welcomeCopy}><span className={styles.welcomeIcon}><UsersRound size={22} /></span><div><h2>Abre tu mesa</h2><p>Indica cuántas personas vienen contigo para empezar a pedir.</p></div></div>
+          <button className={styles.primary} type="button" onClick={() => selectModal("start")}>Iniciar sesión de mesa <ArrowRight size={18} /></button>
         </div>}
         {active && !host && <div className={styles.readOnly}>
           <UsersRound size={18} /><div><strong>Modo acompañante</strong><p>{active.session.canClaim
@@ -338,10 +338,11 @@ export function Mesa({ restaurantSlug, tableCode }: { restaurantSlug: string; ta
           </aside>
         </div>
         <nav className={styles.bottomNav} aria-label="Accesos de la mesa">
-          <a href="#menu"><Utensils size={20} /> Menú</a>
+          <a href="#menu" className={styles.menuNav}><Utensils size={20} /> Menú</a>
           <button type="button" onClick={() => selectModal("orders")}><ClipboardList size={20} /> Pedidos</button>
           <a href="#servicios"><Bell size={20} /> Servicios</a>
-          {canOrder && <button type="button" onClick={() => selectModal("cart")}><ShoppingBag size={20} /> Carrito{cartCount > 0 && <span>{cartCount}</span>}</button>}
+          {canOrder && <button type="button" className={styles.cartNav} onClick={() => selectModal("cart")}><ShoppingBag size={20} /> Carrito{cartCount > 0 && <span>{cartCount}</span>}</button>}
+          {host && checkoutStarted && <button type="button" className={styles.cartNav} onClick={() => selectModal("checkout")}><CreditCard size={20} /> Cuenta</button>}
         </nav>
         {modal === "start" && !active && <OpenDialog open={openTable} close={() => setModal(null)} />}
         {modal === "orders" && <OrdersDialog active={active} format={format} close={() => setModal(null)} />}
