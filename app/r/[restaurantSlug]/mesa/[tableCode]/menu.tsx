@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronRight, Flame, Plus, Search, Utensils, X } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { orderLineSchema } from "@/lib/validators";
 
 import { lineTotal, message, requestId, tagLabels, type CartLine, type Category, type Dish } from "./data";
@@ -18,14 +18,17 @@ function DishCard({ dish, canOrder, format, open, featured = false }: {
   dish: Dish; canOrder: boolean; format: Format; open: (dish: Dish) => void; featured?: boolean;
 }) {
   return <article className={featured ? `${styles.dish} ${styles.featuredDish}` : styles.dish}>
-    {dish.imageUrl && <img className={styles.dishPhoto} src={dish.imageUrl} alt="" loading="lazy" referrerPolicy="no-referrer" />}
+    {dish.imageUrl && <div className={styles.dishMedia}><img className={styles.dishPhoto} src={dish.imageUrl} alt="" loading="lazy" referrerPolicy="no-referrer" /></div>}
     <div className={styles.dishBody}>
-      <div className={styles.dishTitle}><h4>{dish.name}</h4><strong>{format(dish.priceCents)}</strong></div>
+      <h4>{dish.name}</h4>
       {dish.description && <p>{dish.description}</p>}
       <DishTags dish={dish} />
-      <button className={styles.dishAction} type="button" onClick={() => open(dish)} aria-label={`${canOrder ? "Agregar" : "Ver"} ${dish.name}`}>
-        {canOrder ? "Agregar" : "Ver detalles"} {canOrder ? <Plus size={17} /> : <ChevronRight size={17} />}
-      </button>
+      <div className={styles.dishFoot}>
+        <strong>{format(dish.priceCents)}</strong>
+        <button className={styles.dishAction} data-order={canOrder} type="button" onClick={() => open(dish)} aria-label={`${canOrder ? "Agregar" : "Ver"} ${dish.name}`}>
+          {canOrder ? <Plus size={21} aria-hidden="true" /> : <ChevronRight size={20} aria-hidden="true" />}
+        </button>
+      </div>
     </div>
   </article>;
 }
@@ -34,7 +37,18 @@ export function Menu({ categories, canOrder, format, open }: {
   categories: Category[]; canOrder: boolean; format: Format; open: (dish: Dish) => void;
 }) {
   const [search, setSearch] = useState("");
-  const [selected, setSelected] = useState("");
+  const [category, setCategory] = useState("");
+  const menu = useRef<HTMLElement>(null);
+  const navigation = useRef<HTMLElement>(null);
+  const availableCategories = categories.filter(({ items }) => items.length);
+  const selected = availableCategories.some(({ id }) => id === category) ? category : "";
+
+  function chooseCategory(id: string, button: HTMLButtonElement) {
+    setCategory(id);
+    const bounds = navigation.current?.getBoundingClientRect();
+    if (bounds) navigation.current?.scrollBy({ left: button.getBoundingClientRect().left - bounds.left - 6 });
+    if (menu.current && menu.current.getBoundingClientRect().top < 0) menu.current.scrollIntoView({ block: "start" });
+  }
   const term = normalize(search.trim());
   const matches = categories.filter(({ id }) => !selected || id === selected)
     .map((category) => ({
@@ -53,7 +67,7 @@ export function Menu({ categories, canOrder, format, open }: {
   }).slice(0, 3) ?? []) : [];
   const featuredIds = new Set(featured.length === 3 ? featured.map(({ id }) => id) : []);
 
-  return <section id="menu" className={styles.menu}>
+  return <section id="menu" ref={menu} className={styles.menu}>
     <div className={styles.menuHeading}>
       <h2>Menú</h2>
       <div className={styles.search}>
@@ -62,10 +76,12 @@ export function Menu({ categories, canOrder, format, open }: {
         {search && <button className={styles.iconButton} type="button" aria-label="Limpiar búsqueda" onClick={() => setSearch("")}><X size={16} /></button>}
       </div>
     </div>
-    <nav className={styles.filters} aria-label="Categorías del menú">
-      {[{ id: "", name: "Todo" }, ...categories.filter(({ items }) => items.length)].map(({ id, name }) =>
-        <button key={id} type="button" aria-pressed={selected === id} onClick={() => setSelected(id)}>{name}</button>)}
-    </nav>
+    <div className={styles.categoryBar}>
+      <nav className={styles.filters} ref={navigation} aria-label="Categorías del menú">
+        {[{ id: "", name: "Todo" }, ...availableCategories].map(({ id, name }) =>
+          <button key={id} type="button" aria-pressed={selected === id} onClick={(event) => chooseCategory(id, event.currentTarget)}>{name}</button>)}
+      </nav>
+    </div>
     {featuredIds.size > 0 && <section className={styles.featured}>
       <h3>Destacados</h3>
       <div>{featured.map((dish) => <DishCard key={dish.id} dish={dish} canOrder={canOrder} format={format} open={open} featured />)}</div>

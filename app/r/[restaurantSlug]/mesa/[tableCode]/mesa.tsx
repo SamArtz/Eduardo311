@@ -8,9 +8,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { checkoutSchema, claimSessionSchema, createOrderSchema, sessionActionSchema, startSessionSchema } from "@/lib/validators";
 
+import { readDraft, writeDraft, type Draft } from "./cart-draft";
 import { Checkout } from "./checkout";
 import {
-  message, requestId, tableRequest, RequestError,
+  lineTotal, message, requestId, tableRequest, RequestError,
   type Alert, type CartLine, type Category, type Dish, type PayInput, type Payment, type Quote, type QuoteInput,
   type Session, type Snapshot,
 } from "./data";
@@ -46,13 +47,14 @@ function intentId(attempt: { current: Attempt | null }, payload: unknown) {
 export function Mesa({ restaurantSlug, tableCode }: { restaurantSlug: string; tableCode: string }) {
   const base = `/api/r/${restaurantSlug}/mesa/${tableCode}`;
   const tokenKey = `restaurantes:host:${restaurantSlug}:${tableCode}`;
+  const draftKey = `${tokenKey}:draft`;
   const token = useRef<string | undefined>(undefined);
+  const draftRef = useRef<Draft | null>(null);
   const sessionReads = useRef(0);
   const menuReads = useRef(0);
   const menuLoading = useRef(false);
   const ordering = useRef(false);
   const calling = useRef(false);
-  const orderRetry = useRef<Attempt | null>(null);
   const paymentRetry = useRef<Attempt | null>(null);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -64,16 +66,23 @@ export function Mesa({ restaurantSlug, tableCode }: { restaurantSlug: string; ta
   const [actionError, setActionError] = useState("");
   const [modal, setModal] = useState<Modal | null>(null);
   const [dish, setDish] = useState<Dish | null>(null);
-  const [cart, setCart] = useState<CartLine[]>([]);
+  const [draft, setDraft] = useState<Draft | null>(null);
   const [sendBusy, setSendBusy] = useState(false);
   const [callBusy, setCallBusy] = useState(false);
   const [cartError, setCartError] = useState("");
   const [triviaVersion, setTriviaVersion] = useState(0);
 
+  const saveDraft = useCallback((next: Draft | null) => {
+    draftRef.current = next;
+    setDraft(next);
+    writeDraft(draftKey, next);
+  }, [draftKey]);
+
   const setToken = useCallback((value?: string) => {
+    if (token.current !== value) saveDraft(null);
     token.current = value;
     storeToken(tokenKey, value);
-  }, [tokenKey]);
+  }, [saveDraft, tokenKey]);
 
   const refreshSession = useCallback(async () => {
     const version = ++sessionReads.current;
@@ -151,7 +160,9 @@ export function Mesa({ restaurantSlug, tableCode }: { restaurantSlug: string; ta
     const visible = () => { if (document.visibilityState === "visible") sync(); };
     const stored = (event: StorageEvent) => {
       if (event.key !== tokenKey) return;
-      token.current = readToken(tokenKey);
+      const next = readToken(tokenKey);
+      if (next !== token.current) saveDraft(null);
+      token.current = next;
       sync();
     };
     events.addEventListener("sync", sync);
@@ -163,23 +174,62 @@ export function Mesa({ restaurantSlug, tableCode }: { restaurantSlug: string; ta
       document.removeEventListener("visibilitychange", visible);
       window.removeEventListener("storage", stored);
     };
-  }, [restaurantId, tableCode, refreshSession, refreshMenu, tokenKey]);
+  }, [restaurantId, tableCode, refreshSession, refreshMenu, saveDraft, tokenKey]);
 
   const active = snapshot?.active ?? null;
   const host = active?.session.role === "HOST";
   const sessionId = active?.session.id;
   const checkoutStarted = active?.payments?.some(({ status }) => status !== "CANCELLED") ?? false;
   const canOrder = host && !checkoutStarted;
-  const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const draftLines = host && draft?.sessionId === sessionId ? draft?.lines ?? [] : [];
+  const products = new Map(categories.flatMap(({ items }) => items.map((item) => [item.id, item] as const)));
+  const unavailable: { id: string; name: string }[] = [];
+  const cart = draftLines.flatMap(({ id, name, menuItemId, modifierIds, quantity, notes }) => {
+    const product = products.get(menuItemId);
+    const modifiers = product?.modifiers.filter(({ id }) => modifierIds.includes(id)) ?? [];
+    if (!product || modifiers.length !== modifierIds.length) {
+      unavailable.push({ id, name });
+      return [];
+    }
+    return [{ id, dish: product, modifiers, quantity, notes: notes ?? "" }];
+  });
+  const cartCount = draftLines.reduce((sum, item) => sum + item.quantity, 0);
+  const subtotal = cart.reduce((sum, line) => sum + lineTotal(line), 0);
   const orderCount = active?.orders.length ?? 0;
+  const menuReady = !loadingMenu && !menuError;
 
   useEffect(() => {
-    orderRetry.current = null;
     paymentRetry.current = null;
-    setCart([]);
     setCartError("");
-    if (!host) setModal((current) => current === "cart" || current === "checkout" ? null : current);
-  }, [host, sessionId]);
+    if (host && sessionId) {
+      const restored = readDraft(draftKey, sessionId);
+      draftRef.current = restored;
+      setDraft(restored);
+    } else {
+      draftRef.current = null;
+      setDraft(null);
+      setModal((current) => current === "cart" || current === "checkout" ? null : current);
+    }
+  }, [draftKey, host, sessionId]);
+
+  function changeQuantity(id: string, quantity: number) {
+    if (!canOrder || !sessionId || ordering.current) return;
+    const lines = (draftRef.current?.lines ?? []).flatMap((item) => item.id !== id ? [item] : quantity ? [{ ...item, quantity }] : []);
+    saveDraft(lines.length ? { sessionId, requestId: requestId(), lines } : null);
+    setCartError("");
+  }
+
+  function addLine(line: CartLine) {
+    if (!canOrder || !sessionId || ordering.current) return;
+    const lines = draftRef.current?.lines ?? [];
+    if (lines.length >= 30) throw new RequestError("Envía esta ronda antes de agregar más platillos.", 422);
+    saveDraft({ sessionId, requestId: requestId(), lines: [...lines, {
+      id: line.id, name: line.dish.name, menuItemId: line.dish.id,
+      modifierIds: line.modifiers.map(({ id }) => id), quantity: line.quantity, notes: line.notes,
+    }] });
+    setCartError("");
+    setDish(null);
+  }
 
   useEffect(() => {
     if (!pendingPayment || !snapshot) return;
@@ -196,6 +246,11 @@ export function Mesa({ restaurantSlug, tableCode }: { restaurantSlug: string; ta
 
   function selectModal(value: Modal) {
     setActionError("");
+    if (value === "checkout" && canOrder && draftRef.current?.lines.length) {
+      setCartError("Envía o quita los productos del carrito antes de abrir la cuenta.");
+      setModal("cart");
+      return;
+    }
     setModal(value);
   }
 
@@ -210,19 +265,21 @@ export function Mesa({ restaurantSlug, tableCode }: { restaurantSlug: string; ta
   }
 
   async function sendOrder() {
-    if (!canOrder || !sessionId || ordering.current || !cart.length) return;
+    const current = draftRef.current;
+    const usedToken = token.current;
+    if (!canOrder || !sessionId || !usedToken || ordering.current || !current?.lines.length ||
+        current.sessionId !== sessionId || !menuReady || unavailable.length) return;
     ordering.current = true;
     setSendBusy(true);
     setCartError("");
     try {
-      const payload = { sessionId, items: cart.map(({ dish, modifiers, quantity, notes }) => ({
-        menuItemId: dish.id, modifierIds: modifiers.map(({ id }) => id), quantity, notes,
-      })) };
+      const payload = { sessionId, requestId: current.requestId,
+        items: current.lines.map(({ menuItemId, modifierIds, quantity, notes }) => ({ menuItemId, modifierIds, quantity, notes })) };
       await tableRequest(base + "/orders", {
-        token: token.current, body: createOrderSchema.parse({ ...payload, requestId: intentId(orderRetry, payload) }),
+        token: usedToken, body: createOrderSchema.parse(payload),
       });
-      orderRetry.current = null;
-      setCart([]);
+      if (usedToken !== token.current) return;
+      saveDraft(null);
       setModal(null);
       setNotice("Pedido enviado a cocina.");
       await refreshSession();
@@ -289,15 +346,17 @@ export function Mesa({ restaurantSlug, tableCode }: { restaurantSlug: string; ta
 
   return <div className={styles.shell}>
     <header className={styles.header}><div className={styles.headerInner}>
-      <a href="#menu" className={styles.brand}><span className={styles.brandIcon}><Utensils size={20} /></span>{name ?? "Restaurante"}</a>
+      <a href="#menu" className={styles.brand}><span className={styles.brandIcon}><Utensils size={20} /></span><span className={styles.brandName}>{name ?? "Restaurante"}</span></a>
       {snapshot && <>
         <nav className={styles.headerNav} aria-label="Navegación principal">
           <a href="#menu">Menú</a><button type="button" onClick={() => selectModal("orders")}>Pedidos</button><a href="#servicios">Servicios</a>
         </nav>
-        <span className={styles.tableBadge}><span /> Mesa {snapshot.table.number}</span>
+        <span className={styles.tableBadge} data-active={!!active}>
+          <i aria-hidden="true" /><span><strong>Mesa {snapshot.table.number}</strong><small>{host ? "Anfitrión" : active ? "Acompañante" : "Disponible"}</small></span>
+        </span>
       </>}
     </div></header>
-    <main className={styles.main}>
+    <main className={styles.main} data-draft={canOrder && cartCount > 0}>
       {!snapshot ? <div className={styles.loading}>
         {connectionError ? <><h1>{connectionError}</h1><button className={styles.primary} type="button" onClick={() => void refreshSession()}>Volver a intentar</button></>
           : <p role="status"><LoaderCircle size={20} className={styles.spin} /> Cargando la mesa…</p>}
@@ -356,29 +415,31 @@ export function Mesa({ restaurantSlug, tableCode }: { restaurantSlug: string; ta
             : menuError ? <div className={styles.empty}><p role="alert">{menuError}</p><button type="button" className={styles.secondary} onClick={() => void refreshMenu()}>Reintentar menú</button></div>
               : <Menu categories={categories} canOrder={canOrder} format={format} open={(item) => { setModal(null); setDish(item); }} />}
         </div>
+        {canOrder && cartCount > 0 && <div className={styles.mobileCart}>
+          <button type="button" onClick={() => selectModal("cart")}>
+            <ShoppingBag size={19} /><span>Ver carrito <small>· {cartCount} {cartCount === 1 ? "producto" : "productos"}</small></span>
+            {menuReady && !unavailable.length && <strong>{format(subtotal)}</strong>}
+            <ChevronRight size={18} />
+          </button>
+        </div>}
         <nav className={styles.bottomNav} aria-label="Accesos de la mesa">
           <a href="#menu" className={styles.menuNav}><Utensils size={20} /> Menú</a>
           <button type="button" onClick={() => selectModal("orders")}><ClipboardList size={20} /> Pedidos</button>
           <a href="#servicios"><Bell size={20} /> Servicios</a>
-          {canOrder && <button type="button" className={styles.cartNav} onClick={() => selectModal("cart")}><ShoppingBag size={20} /> Carrito{cartCount > 0 && <span>{cartCount}</span>}</button>}
-          {host && checkoutStarted && <button type="button" className={styles.cartNav} onClick={() => selectModal("checkout")}><CreditCard size={20} /> Cuenta</button>}
+          {canOrder && !cartCount && !orderCount && <button type="button" className={styles.cartNav} onClick={() => selectModal("cart")}><ShoppingBag size={20} /> Carrito</button>}
+          {host && orderCount > 0 && <button type="button" className={styles.cartNav} onClick={() => selectModal("checkout")}><CreditCard size={20} /> Cuenta</button>}
         </nav>
         {modal === "start" && !active && <OpenDialog open={openTable} close={() => setModal(null)} />}
         {modal === "orders" && <OrdersDialog active={active} format={format} close={() => setModal(null)} />}
         {modal === "wifi" && <WifiDialog ssid={snapshot.restaurant.wifiSsid} password={snapshot.restaurant.wifiPassword} close={() => setModal(null)} />}
         {modal === "trivia" && <TriviaDialog path={base + "/trivia"} sessionId={sessionId} refreshVersion={triviaVersion} tableNumber={snapshot.table.number} close={() => setModal(null)} />}
         {modal === "cart" && canOrder && <CartDialog cart={cart} format={format} busy={sendBusy} error={cartError} close={() => setModal(null)}
-          send={() => void sendOrder()} change={(id, quantity) => setCart((current) => quantity === 0 ? current.filter((line) => line.id !== id)
-            : current.map((line) => line.id === id ? { ...line, quantity } : line))} />}
+          unavailable={unavailable} menuReady={menuReady} refresh={() => void refreshMenu()}
+          send={() => void sendOrder()} change={changeQuantity} />}
         {modal === "checkout" && host && active && <Checkout active={active} format={format} close={() => setModal(null)}
           quote={(input: QuoteInput) => checkoutRequest<Quote>("/checkout/quote", input)} pay={pay} completed={paid} />}
-        {dish && <DishDialog key={dish.id} dish={dish} canOrder={canOrder} format={format} close={() => setDish(null)} add={(line) => {
-          if (!canOrder) return;
-          if (cart.length >= 30) throw new RequestError("Envía esta ronda antes de agregar más platillos.", 422);
-          setCart((current) => [...current, line]);
-          setCartError("");
-          setDish(null);
-        }} />}
+        {dish && <DishDialog key={dish.id} dish={dish} canOrder={canOrder} format={format} close={() => setDish(null)} add={addLine} />}
+
       </>}
     </main>
   </div>;

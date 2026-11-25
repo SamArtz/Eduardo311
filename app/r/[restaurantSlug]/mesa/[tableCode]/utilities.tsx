@@ -74,12 +74,19 @@ export function OrdersDialog({ active, format, close }: {
   </Dialog>;
 }
 
-export function CartDialog({ cart, format, busy, close, change, send, error }: {
+export function CartDialog({ cart, format, busy, close, change, send, error, unavailable, menuReady, refresh }: {
   cart: CartLine[]; format: (cents: number) => string; busy: boolean; close: () => void;
   change: (id: string, quantity: number) => void; send: () => void; error: string;
+  unavailable: { id: string; name: string }[]; menuReady: boolean; refresh: () => void;
 }) {
   return <Dialog title="Tu carrito" close={() => { if (!busy) close(); }}>
-    {cart.length ? <div className={styles.form}>
+    {cart.length || unavailable.length ? <div className={styles.form}>
+      {!menuReady ? <div className={styles.notice}><p>Actualiza el menú para verificar los precios y las opciones.</p>
+        <button type="button" className={styles.textButton} onClick={refresh}>Actualizar menú</button></div> : unavailable.map(({ id, name }) =>
+        <div key={id} className={styles.unavailableLine}>
+          <div><strong>{name}</strong><small>El producto o alguna opción ya no está disponible.</small></div>
+          <button type="button" className={styles.secondary} disabled={busy} onClick={() => change(id, 0)}>Quitar</button>
+        </div>)}
       {cart.map((line) => <div key={line.id} className={styles.cartLine}>
         <div><strong>{line.dish.name}</strong>
           {line.modifiers.length > 0 && <small>{line.modifiers.map(({ name }) => name).join(", ")}</small>}
@@ -93,7 +100,7 @@ export function CartDialog({ cart, format, busy, close, change, send, error }: {
       </div>)}
       <div className={styles.summary}><span>Subtotal estimado</span><strong>{format(cart.reduce((sum, line) => sum + lineTotal(line), 0))}</strong></div>
       {error && <p role="alert" className={styles.error}>{error}</p>}
-      <button type="button" className={styles.primary} disabled={busy} onClick={send}>{busy ? "Enviando…" : "Enviar a cocina"}</button>
+      <button type="button" className={styles.primary} disabled={busy || !menuReady || !!unavailable.length} onClick={send}>{busy ? "Enviando…" : "Enviar a cocina"}</button>
     </div> : <div className={styles.empty}><ListOrdered size={22} /><p>Agrega un platillo del menú para crear un pedido.</p></div>}
   </Dialog>;
 }
