@@ -139,3 +139,21 @@ export const triviaAnswerSchema = sessionActionSchema.extend({
   roundId: identifier,
   optionIndex: z.int().min(0).max(5),
 });
+
+export const claimSessionSchema = startSessionSchema.partial();
+export const tableCodeSchema = urlSegment;
+export const tableActionSchema = z.strictObject({ tableId: identifier, sessionId: identifier });
+export const closeTableSchema = tableActionSchema.extend({ confirmUnpaid: z.boolean().default(false) });
+export const kdsQuerySchema = z.strictObject({ stationId: identifier.optional() });
+export const waiterQuerySchema = z.strictObject({
+  filter: z.enum(["ALL", "ALERT", "READY", "ACTIVE", "FREE"]).default("ALL"),
+});
+export const paymentDecisionSchema = z.strictObject({
+  paymentId: identifier,
+  decision: z.enum(["CONFIRM", "CANCEL"]),
+});
+export const startTriviaRoundSchema = z.strictObject({
+  questionId: identifier,
+  durationSeconds: z.int().min(5).max(300),
+});
+export const checkoutQuoteSchema = checkoutSchema.pick({ sessionId: true, split: true, tip: true });

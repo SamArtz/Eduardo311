@@ -243,6 +243,7 @@ model ServiceAlert {
   sessionId           String
   createdAt           DateTime     @default(now())
   resolvedAt          DateTime?
+  cancelledAt         DateTime?
   responseTimeSeconds Int?
   session             TableSession @relation(fields: [restaurantId, sessionId], references: [restaurantId, id])
 
