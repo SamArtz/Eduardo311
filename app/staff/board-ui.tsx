@@ -20,6 +20,7 @@ export function BoardFrame({ restaurant, title, connection, refresh, children }:
       <nav className={styles.nav} aria-label="Paneles del personal">
         <Link href="/staff/kds" aria-current={section === "kds" ? "page" : undefined}>Cocina</Link>
         <Link href="/staff/waiter" aria-current={section === "waiter" ? "page" : undefined}>Meseros</Link>
+        <Link href="/admin" aria-current={section === "admin" ? "page" : undefined}>Administración</Link>
       </nav>
       <div className={styles.tools}>
         <button className={styles.iconButton} type="button" aria-label="Actualizar tablero" title="Actualizar" onClick={refresh}><RefreshCw size={18} /></button>

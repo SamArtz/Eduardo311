@@ -116,6 +116,11 @@
 .checkbox { display: flex; gap: 8px; align-items: center; color: #ffcebc; }
 .checkbox input { accent-color: var(--accent); }
 @media (max-width: 520px) {
+  .shell[data-section="admin"] .pageTitle { flex-wrap: wrap; }
+  .shell[data-section="admin"] :is(.pageTitle h1, .accessCard h1) {
+    font-size: clamp(36px, 9vw, 46px);
+    overflow-wrap: anywhere;
+  }
   .nav { order: 3; width: 100%; }
 }
 @media (min-width: 675px) {

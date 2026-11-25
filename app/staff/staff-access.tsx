@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, CookingPot, KeyRound, Workflow } from "lucide-react";
+import { ArrowRight, CookingPot, KeyRound, Settings2, Workflow } from "lucide-react";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 
 import { credentialsSchema, errorMessage, staffRequest, type Credentials, type Section } from "./data";
@@ -62,12 +62,12 @@ export function StaffAccess({ section, children }: { section: Section; children:
     }
   }
 
-  return <div className={styles.shell}>
+  return <div className={styles.shell} data-section={section}>
     {ready && credentials ? <Context.Provider value={{ credentials, section, signOut }}>{children}</Context.Provider> :
       <main className={styles.access}>
         <div className={styles.accessCard}>
-          <div className={styles.accessIcon}>{section === "kds" ? <CookingPot size={28} /> : <Workflow size={28} />}</div>
-          <h1>{section === "kds" ? "Cocina" : "Meseros"}</h1>
+          <div className={styles.accessIcon}>{section === "kds" ? <CookingPot size={28} /> : section === "admin" ? <Settings2 size={28} /> : <Workflow size={28} />}</div>
+          <h1>{section === "kds" ? "Cocina" : section === "admin" ? "Administración" : "Meseros"}</h1>
           <p>Ingresa con la credencial de tu restaurante.</p>
           {ready && <form onSubmit={(event) => { event.preventDefault(); void signIn(); }}>
             <label>ID del restaurante<input autoCapitalize="none" autoComplete="off" spellCheck={false}

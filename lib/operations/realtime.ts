@@ -3,7 +3,7 @@ import "server-only";
 import { EventEmitter } from "node:events";
 
 type Change = {
-  topic: "session" | "orders" | "alerts" | "checkout" | "trivia";
+  topic: "session" | "orders" | "alerts" | "checkout" | "trivia" | "catalog";
   tableId?: string;
 };
 

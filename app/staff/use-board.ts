@@ -7,7 +7,7 @@ import { useStaff } from "./staff-access";
 
 type Connection = "connecting" | "live" | "retrying";
 
-async function readEvents(stream: ReadableStream<Uint8Array>, frame: (event: string) => void) {
+async function readEvents(stream: ReadableStream<Uint8Array>, frame: (event: string, isTrivia: boolean) => void) {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -21,8 +21,7 @@ async function readEvents(stream: ReadableStream<Uint8Array>, frame: (event: str
         const message = buffer.slice(0, boundary);
         buffer = buffer.slice(boundary + 2);
         const event = /^event: *(sync|change)$/m.exec(message)?.[1];
-        const relevant = message.includes('"topic":"trivia"') ? undefined : event;
-        frame(relevant ?? "");
+        frame(event ?? "", message.includes('"topic":"trivia"'));
         boundary = buffer.indexOf("\n\n");
       }
     }
@@ -94,12 +93,12 @@ export function useBoard<T>() {
           return;
         }
         if (!response.ok || !response.body || !response.headers.get("content-type")?.includes("text/event-stream")) return;
-        await readEvents(response.body, (event) => {
+        await readEvents(response.body, (event, isTrivia) => {
           if (closed) return;
           armWatchdog();
           online = true;
           setConnection("live");
-          if (event) void refresh();
+          if (event && (!isTrivia || section === "admin")) void refresh();
         });
       } catch {
         // The loop retries after aborts, idle proxies and connection failures.
@@ -125,15 +124,15 @@ export function useBoard<T>() {
       stream?.abort();
       document.removeEventListener("visibilitychange", visible);
     };
-  }, [credentials, denied, refresh]);
+  }, [credentials, denied, refresh, section]);
 
-  async function mutate(key: string, path: string, method: "POST" | "PATCH", body: unknown, success: string) {
+  async function mutate(key: string, path: string, method: "POST" | "PATCH" | "DELETE", body: unknown, success: string, archivedMessage?: string) {
     if (running.current.has(key)) return false;
     running.current.add(key);
     setPending([...running.current]);
     try {
-      await staffRequest(credentials, path, { method, body });
-      setMessage(success);
+      const result = await staffRequest<{ archived?: boolean }>(credentials, path, { method, body });
+      setMessage(result.archived ? archivedMessage ?? success : success);
       return true;
     } finally {
       running.current.delete(key);

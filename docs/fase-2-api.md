@@ -36,7 +36,7 @@ Usa el token devuelto como `Authorization: Bearer <token>`. El servidor guarda s
 
 Para entrar a los paneles, abre `/staff/kds` o `/staff/waiter` e ingresa `restaurantId` y `token` del resultado del comando. Usa el slug de tu restaurante al generar la credencial (por ejemplo, `street-demo` para Patio Street). Una credencial `ADMIN` accede a ambos paneles. El navegador conserva la credencial en la sesión de la pestaña y el botón de salida la elimina de esa sesión.
 
-El prefijo es `/api/staff/{restaurantId}`. El rol `ADMIN` puede ejecutar todas las acciones del personal.
+El prefijo es `/api/staff/{restaurantId}`. El rol `ADMIN` puede ejecutar todas las acciones del personal y acceder a `/admin`.
 
 | Método y ruta | Operación | Rol adicional |
 | --- | --- | --- |
@@ -56,4 +56,13 @@ Un cierre cancela alertas pendientes sin registrarlas como atendidas. Los pedido
 
 `GET /api/realtime/{restaurantId}?tableCode=…` se puede consumir con `EventSource`. Emite cambios de esa mesa y de la trivia del restaurante. El personal omite el parámetro y envía su credencial mediante `fetch` con lectura del stream.
 
-Los eventos `change` llevan `{ topic }` con `session`, `orders`, `alerts`, `checkout` o `trivia`. El cliente vuelve a consultar las APIs correspondientes. `sync` se emite al conectar y cada 15 segundos para reconciliar desconexiones o cambios hechos por otro proceso. El EventEmitter entrega señales inmediatas entre conexiones atendidas por el mismo proceso Node.js.
+Los eventos `change` llevan `{ topic }` con `session`, `orders`, `alerts`, `checkout`, `trivia` o `catalog`. El cliente vuelve a consultar las APIs correspondientes. `sync` se emite al conectar y cada 15 segundos para reconciliar desconexiones o cambios hechos por otro proceso. El EventEmitter entrega señales inmediatas entre conexiones atendidas por el mismo proceso Node.js.
+
+
+## Administración
+
+Abre `/admin` con la credencial `ADMIN` del restaurante. El endpoint `/api/staff/{restaurantId}/admin` sirve el resumen y el catálogo mediante `GET`. Acepta `POST { kind, values }` para crear, `PATCH { kind, id, values }` para editar y `DELETE { kind, id }` para dar de baja. En configuración se usa `PATCH { kind: "settings", values }`. Las entidades admitidas son `category`, `station`, `product`, `question` y `table`.
+
+Las ventas corresponden a cobros confirmados en la fecha local del restaurante e incluyen impuestos. Las propinas se contabilizan aparte del importe mostrado como ventas. Para el ticket se cuenta una sesión por mesa y visita aunque tenga varios pagos. La respuesta de meseros incluye alertas atendidas en ese día.
+
+En Productos, el filtro **Ocultos** permite revisar etiquetas y alérgenos antes de marcar **Mostrar en el menú**. Los productos y preguntas con historial se desactivan. Una categoría o estación con referencias y una mesa con historial permanecen disponibles para consulta.

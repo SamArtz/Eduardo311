@@ -5,7 +5,7 @@ import { hostTokenSchema, restaurantParamsSchema } from "@/lib/validators";
 
 export const credentialsSchema = restaurantParamsSchema.extend({ token: hostTokenSchema });
 export type Credentials = z.infer<typeof credentialsSchema>;
-export type Section = "kds" | "waiter";
+export type Section = "kds" | "waiter" | "admin";
 export type Restaurant = { name: string; currency: string };
 
 export type Station = { id: string; name: string };
@@ -51,7 +51,7 @@ export function errorMessage(error: unknown) {
 }
 
 export async function staffRequest<T>(credentials: Credentials, path: string, options?: {
-  method: "POST" | "PATCH"; body: unknown;
+  method: "POST" | "PATCH" | "DELETE"; body: unknown;
 }, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`/api/staff/${credentials.restaurantId}/${path}`, {
     method: options?.method ?? "GET",

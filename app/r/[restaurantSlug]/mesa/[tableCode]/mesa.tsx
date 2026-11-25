@@ -48,6 +48,8 @@ export function Mesa({ restaurantSlug, tableCode }: { restaurantSlug: string; ta
   const tokenKey = `restaurantes:host:${restaurantSlug}:${tableCode}`;
   const token = useRef<string | undefined>(undefined);
   const sessionReads = useRef(0);
+  const menuReads = useRef(0);
+  const menuLoading = useRef(false);
   const ordering = useRef(false);
   const calling = useRef(false);
   const orderRetry = useRef<Attempt | null>(null);
@@ -88,15 +90,25 @@ export function Mesa({ restaurantSlug, tableCode }: { restaurantSlug: string; ta
     }
   }, [base, setToken]);
 
-  const refreshMenu = useCallback(async () => {
-    setLoadingMenu(true);
+  const refreshMenu = useCallback(async (background = false) => {
+    if (background && menuLoading.current) return;
+    const version = ++menuReads.current;
+    if (!background) {
+      menuLoading.current = true;
+      setLoadingMenu(true);
+    }
     try {
-      setCategories((await tableRequest<{ categories: Category[] }>(base + "/menu")).categories);
+      const { categories: next } = await tableRequest<{ categories: Category[] }>(base + "/menu");
+      if (version !== menuReads.current) return;
+      setCategories(next);
       setMenuError("");
     } catch (failure) {
-      setMenuError(message(failure));
+      if (!background && version === menuReads.current) setMenuError(message(failure));
     } finally {
-      setLoadingMenu(false);
+      if (!background && version === menuReads.current) {
+        menuLoading.current = false;
+        setLoadingMenu(false);
+      }
     }
   }, [base]);
 
@@ -118,17 +130,22 @@ export function Mesa({ restaurantSlug, tableCode }: { restaurantSlug: string; ta
     }
     void initialize();
     void refreshMenu();
-    return () => { mounted = false; sessionReads.current++; };
+    return () => { mounted = false; sessionReads.current++; menuReads.current++; };
   }, [base, refreshMenu, refreshSession, setToken, tokenKey]);
 
   const restaurantId = snapshot?.restaurant.id;
   useEffect(() => {
     if (!restaurantId) return;
     const events = new EventSource(`/api/realtime/${restaurantId}?tableCode=${encodeURIComponent(tableCode)}`);
-    const sync = () => { void refreshSession(); setTriviaVersion((version) => version + 1); };
+    const sync = () => {
+      void refreshSession();
+      void refreshMenu(true);
+      setTriviaVersion((version) => version + 1);
+    };
     const change = (event: MessageEvent<string>) => {
       const { topic } = JSON.parse(event.data) as { topic: string };
       if (topic === "trivia") setTriviaVersion((version) => version + 1);
+      else if (topic === "catalog") void refreshMenu(true);
       else void refreshSession();
     };
     const visible = () => { if (document.visibilityState === "visible") sync(); };
@@ -146,7 +163,7 @@ export function Mesa({ restaurantSlug, tableCode }: { restaurantSlug: string; ta
       document.removeEventListener("visibilitychange", visible);
       window.removeEventListener("storage", stored);
     };
-  }, [restaurantId, tableCode, refreshSession, tokenKey]);
+  }, [restaurantId, tableCode, refreshSession, refreshMenu, tokenKey]);
 
   const active = snapshot?.active ?? null;
   const host = active?.session.role === "HOST";
